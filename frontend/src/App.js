@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+// Use an environment variable for the API URL
+const API_URL = process.env.REACT_APP_API_URL || '/api';
+
 function App() {
   const [stockData, setStockData] = useState([]);
   const [symbol, setSymbol] = useState('AAPL');
 
   useEffect(() => {
     const fetchData = async () => {
-      const result = await axios.get(`http://localhost:5000/api/stock/${symbol}`);
-      setStockData(result.data);
+      try {
+        const result = await axios.get(`${API_URL}/stock/${symbol}`);
+        setStockData(result.data);
+      } catch (error) {
+        console.error("Error fetching stock data:", error);
+        // Handle the error appropriately
+      }
     };
+
     fetchData();
   }, [symbol]);
 
