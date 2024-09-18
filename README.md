@@ -1,11 +1,32 @@
-When working on your project:
+##### TO SET UP TIMESCALE DB ####
+1. Run setup_db_py
 
-For backend work:
+##### TRANFORM STOCK DATA #####
+1. data_transformer.py script is used to transform data from various sources
 
-1. cd backend
-2. source venv/bin/activate  # On Windows: venv\Scripts\activate
-3. python app.py
+#### GET STOCK DATA #####
+1. stock_data_fetcher.py is used to fetch stock data from various sources
 
-For frontend work:
-1. cd frontend
-2. npm start
+
+#### RUNNING THE APPLICATION ####
+1. In Digital Ocean, run the script ./start_app.sh
+
+OR
+-----------
+Manually:
+
+echo "Starting the backend (Flask app)..."
+cd /path/to/backend
+source venv/bin/activate
+pkill -f "python app.py"  # Kill any existing instance
+nohup python app.py > app.log 2>&1 &
+echo "Backend started. Check app.log for details."
+
+echo "Starting the frontend (React app)..."
+cd /path/to/frontend
+npm run build
+pkill -f "npx serve -s build"  # Kill any existing instance
+nohup npx serve -s build -l 3000 > frontend.log 2>&1 &
+echo "Frontend started. Check frontend.log for details."
+
+echo "Application startup complete."
