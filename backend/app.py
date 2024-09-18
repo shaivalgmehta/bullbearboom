@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -49,20 +49,29 @@ def get_db_connection():
         logging.error(f"Database connection failed: {e}")
         raise
 
-@app.route('/api/stock/<symbol>')
-def get_stock_data(symbol):
-    logging.info(f"Fetching data for symbol: {symbol}")
+@app.route('/api/stocks/latest')
+def get_latest_stock_data():
+    logging.info("Fetching latest data for all stocks")
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM stock_data WHERE symbol = %s ORDER BY time DESC LIMIT 100", (symbol,))
+        
+        query = """
+            SELECT DISTINCT ON (stock) *
+            FROM screener_table
+            ORDER BY stock, time DESC
+        """
+        
+        cur.execute(query)
         data = cur.fetchall()
-        logging.info(f"Fetched {len(data)} records for {symbol}")
+        
+        logging.info(f"Fetched latest data for {len(data)} stocks")
         cur.close()
         conn.close()
+        
         return jsonify(data)
     except Exception as e:
-        logging.error(f"Error fetching stock data: {e}")
+        logging.error(f"Error fetching latest stock data: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(500)

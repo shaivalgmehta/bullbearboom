@@ -1,4 +1,17 @@
-requests==2.26.0
-python-dotenv==0.19.1
-psycopg2-binary==2.9.6
-Flask==2.0.1
+blinker==1.8.2
+certifi==2024.8.30
+charset-normalizer==3.3.2
+click==8.1.7
+colorama==0.4.6
+Flask==2.0.1  # Keeping this version for now
+Flask-Cors==5.0.0
+idna==3.10
+itsdangerous==2.2.0
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+requests==2.32.3
+urllib3==2.2.3
+Werkzeug==2.0.1  # Keeping this version for now
+twelvedata==1.2.24

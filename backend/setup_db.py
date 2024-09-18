@@ -22,24 +22,50 @@ def setup_database():
     )
     cur = conn.cursor()
 
-    # Create table
+    # Create screener_table
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS stock_data (
+        CREATE TABLE IF NOT EXISTS screener_table (
             time TIMESTAMPTZ NOT NULL,
-            symbol TEXT NOT NULL,
-            price NUMERIC,
-            volume NUMERIC
+            stock TEXT NOT NULL,
+            market_cap NUMERIC,
+            pe_ratio NUMERIC,
+            ev_ebitda NUMERIC,
+            pb_ratio NUMERIC,
+            peg_ratio NUMERIC,
+            last_year_sales NUMERIC,
+            current_year_sales NUMERIC,
+            sales_change_percent NUMERIC,
+            last_year_ebitda NUMERIC,
+            current_year_ebitda NUMERIC,
+            ebitda_change_percent NUMERIC,
+            roce NUMERIC,
+            discounted_cash_flow NUMERIC,
+            ema NUMERIC,
+            force_index NUMERIC,
+            williams_percent_r NUMERIC
         );
     """)
 
-    # Create hypertable
+    # Create hypertable for screener_table
     cur.execute("""
-        SELECT create_hypertable('stock_data', 'time', if_not_exists => TRUE);
+        SELECT create_hypertable('screener_table', 'time', if_not_exists => TRUE);
     """)
 
-    # Create index on symbol for faster queries
+    # Create indexes for efficient querying on screener_table
     cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_stock_data_symbol ON stock_data (symbol);
+        CREATE INDEX IF NOT EXISTS idx_screener_stock ON screener_table (stock);
+        CREATE INDEX IF NOT EXISTS idx_screener_market_cap ON screener_table (market_cap);
+        CREATE INDEX IF NOT EXISTS idx_screener_pe_ratio ON screener_table (pe_ratio);
+        CREATE INDEX IF NOT EXISTS idx_screener_ev_ebitda ON screener_table (ev_ebitda);
+        CREATE INDEX IF NOT EXISTS idx_screener_pb_ratio ON screener_table (pb_ratio);
+        CREATE INDEX IF NOT EXISTS idx_screener_peg_ratio ON screener_table (peg_ratio);
+        CREATE INDEX IF NOT EXISTS idx_screener_sales_change ON screener_table (sales_change_percent);
+        CREATE INDEX IF NOT EXISTS idx_screener_ebitda_change ON screener_table (ebitda_change_percent);
+        CREATE INDEX IF NOT EXISTS idx_screener_roce ON screener_table (roce);
+        CREATE INDEX IF NOT EXISTS idx_screener_dcf ON screener_table (discounted_cash_flow);
+        CREATE INDEX IF NOT EXISTS idx_screener_ema ON screener_table (ema);
+        CREATE INDEX IF NOT EXISTS idx_screener_force_index ON screener_table (force_index);
+        CREATE INDEX IF NOT EXISTS idx_screener_williams_r ON screener_table (williams_percent_r);
     """)
 
     conn.commit()
