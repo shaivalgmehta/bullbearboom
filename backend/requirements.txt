@@ -14,4 +14,4 @@ python-dotenv==1.0.1
 requests==2.32.3
 urllib3==2.2.3
 Werkzeug==2.0.1  # Keeping this version for now
-twelvedata==1.2.24
+twelvedata[pandas]==1.2.24
