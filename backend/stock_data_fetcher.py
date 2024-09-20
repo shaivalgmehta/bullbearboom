@@ -36,10 +36,16 @@ def fetch_stock_statistics_twelve_data(symbol):
     return statistics
 
 def fetch_technical_indicators_twelve_data(symbol):
-    ema = td.ema(symbol=symbol, interval="1day").as_json()
-    return ema
+    technical_indicator = td.time_series(
+        symbol=symbol,
+        interval="1day",
+        outputsize=1
+    ).with_ema(
+        time_period=200
+    ).without_ohlc().as_json()
+    return technical_indicator
 
-def store_stock_data(data):
+def store_screener_data(data):
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -59,14 +65,15 @@ def store_stock_data(data):
         data['pb_ratio'],
         data['peg_ratio'],
         data['current_year_sales'],
-        data['current_year_ebitda']
+        data['current_year_ebitda'],
+        data['ema']
     )]
 
     # Insert data
     execute_values(cur, """
         INSERT INTO screener_table (
             time, stock, market_cap, pe_ratio, ev_ebitda, pb_ratio, 
-            peg_ratio, current_year_sales, current_year_ebitda
+            peg_ratio, current_year_sales, current_year_ebitda, ema
         ) VALUES %s
     """, values)
 
@@ -80,6 +87,7 @@ def main():
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data(symbol)
     
+
     # Get the appropriate transformer
     transformer = get_transformer('twelvedata_screener')
     
@@ -89,18 +97,20 @@ def main():
         # Fetch all required data
         stock_data = stock
         statistics = fetch_stock_statistics_twelve_data(symbol)
-        
+        technical_indicator = fetch_technical_indicators_twelve_data(symbol)
+
         # Combine all data
         combined_data = {
             'stock_data': stock_data,
             'statistics': statistics,
+            'technical_indicator': technical_indicator
         }
         
         # Transform the data
         transformed_data = transformer.transform(combined_data)[0]
         
         # Store the transformed data
-        store_stock_data(transformed_data)
+        store_screener_data(transformed_data)
         
         print(f"Data for {symbol} has been stored in TimescaleDB")
 

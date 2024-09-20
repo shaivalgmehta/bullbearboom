@@ -10,6 +10,7 @@ class TwelveDataScreenerTransformer(BaseTransformer):
     def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         stock_data = data['stock_data']
         statistics = data['statistics']
+        technical_indicator = data['technical_indicator']
         
         transformed_data = {
             'stock': stock_data['symbol'],
@@ -19,7 +20,8 @@ class TwelveDataScreenerTransformer(BaseTransformer):
             'pb_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_book_mrq']),
             'peg_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['peg_ratio']),
             'current_year_sales': self._parse_numeric(statistics['statistics']['financials']['income_statement']['revenue_ttm']),
-            'current_year_ebitda': self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda'])
+            'current_year_ebitda': self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda']),
+            'ema': self._parse_numeric(technical_indicator[0]['ema'])
         }
         return [transformed_data]
 
