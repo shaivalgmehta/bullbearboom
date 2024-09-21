@@ -9,12 +9,15 @@ class BaseTransformer(ABC):
     def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         pass
 
+################# SCREENER DATA TRANSFORMER ###########################################################################
+
 class TwelveDataScreenerTransformer(BaseTransformer):
     def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         stock_data = data['stock_data']
         statistics = data['statistics']
         technical_indicator = data['technical_indicator']
         williams_r_transformed_data = data['williams_r_transformed_data']
+        force_index_transformed_data = data['force_index_transformed_data']
         
         transformed_data = {
             'stock': stock_data['symbol'],
@@ -28,7 +31,10 @@ class TwelveDataScreenerTransformer(BaseTransformer):
             'ema': self._parse_numeric(technical_indicator[0]['ema']),
             'williams_r': self._parse_numeric(williams_r_transformed_data['williams_r']),
             'williams_r_ema': self._parse_numeric(williams_r_transformed_data['williams_r_ema']),
-            'alert_state': williams_r_transformed_data['alert_state']
+            'williams_r_momentum_alert_state': williams_r_transformed_data['williams_r_momentum_alert_state'],
+            'force_index_7_week': self._parse_numeric(force_index_transformed_data['force_index_7_week']),
+            'force_index_52_week': self._parse_numeric(force_index_transformed_data['force_index_52_week']),
+            'force_index_alert_state': force_index_transformed_data['force_index_alert_state']
         }
         return [transformed_data]
 
@@ -42,6 +48,9 @@ class TwelveDataScreenerTransformer(BaseTransformer):
                 return None
         else:
             return None
+
+
+################# WILLIAMS R MOMENTUM ALERT TRANSFORMER & CALCULATIONS ###########################################################################
 
 class WilliamsRTransformer(BaseTransformer):
     def __init__(self, db_connection_params):
@@ -69,14 +78,14 @@ class WilliamsRTransformer(BaseTransformer):
         prev_alert_state = self._get_previous_alert_state(symbol)
         
         # Determine the alert state
-        alert_state = self._determine_alert_state(latest_williams_r, ema, prev_alert_state)
+        williams_r_momentum_alert_state = self._determine_alert_state(latest_williams_r, ema, prev_alert_state)
         print(f"Previous Alert State: {prev_alert_state}")
-        print(f"New Alert State: {alert_state}")
+        print(f"New Alert State: {williams_r_momentum_alert_state}")
         return {
             'datetime': latest_datetime,
             'williams_r': latest_williams_r,
             'williams_r_ema': ema,
-            'alert_state': alert_state
+            'williams_r_momentum_alert_state': williams_r_momentum_alert_state
         }
 
     def _get_previous_alert_state(self, symbol):
@@ -84,7 +93,7 @@ class WilliamsRTransformer(BaseTransformer):
         cur = conn.cursor()
         
         cur.execute("""
-            SELECT alert_state 
+            SELECT williams_r_momentum_alert_state 
             FROM williams_r_table 
             WHERE stock = %s 
             ORDER BY time DESC 
@@ -100,23 +109,102 @@ class WilliamsRTransformer(BaseTransformer):
 
     def _determine_alert_state(self, williams_r, ema, prev_state):
         if williams_r is None or ema is None:
-            return 'INACTIVE'
+            return '-'
         
         meets_criteria = williams_r > ema and williams_r > -80
         
         if prev_state is None:
-            return 'TRIGGERED' if meets_criteria else 'INACTIVE'
-        elif prev_state == 'TRIGGERED':
-            return 'ACTIVE' if meets_criteria else 'INACTIVE'
-        elif prev_state == 'ACTIVE':
-            return 'ACTIVE' if meets_criteria else 'INACTIVE'
-        else:  # prev_state == 'INACTIVE'
-            return 'TRIGGERED' if meets_criteria else 'INACTIVE'
+            return '$$$' if meets_criteria else '-'
+        elif prev_state == '$$$':
+            return '$' if meets_criteria else '-'
+        elif prev_state == '$':
+            return '$' if meets_criteria else '-'
+        else:  # prev_state == '-'
+            return '$$$' if meets_criteria else '-'
+
+
+################# FORCE INDEX ALERT TRANSFORMER & CALCULATIONS ###########################################################################
+
+class ForceIndexTransformer(BaseTransformer):
+    def __init__(self, db_connection_params):
+        self.db_connection_params = db_connection_params
+
+    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
+         # Convert to DataFrame and sort by date
+        df = pd.DataFrame(data)
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        df = df.sort_values('datetime')  # Sort in ascending order
+
+        # Convert relevant columns to float
+        df['close'] = df['close'].astype(float)
+        df['volume'] = df['volume'].astype(float)
+
+        # Calculate Force Index
+        df['force_index'] = (df['close'] - df['close'].shift(1)) * df['volume']
+        
+         # Calculate 7-week and 52-week SMAs
+        force_index_7_week = df['force_index'].rolling(window=7).mean().iloc[-1]
+        force_index_52_week = df['force_index'].rolling(window=52).mean().iloc[-1]
+        
+        # Calculate last week's SMAs
+        last_week_force_index_7_week = df['force_index'].rolling(window=7).mean().iloc[-2]
+        last_week_force_index_52_week = df['force_index'].rolling(window=52).mean().iloc[-2]
+        
+        # Determine alert state
+        prev_alert_state = self._get_previous_alert_state(symbol)
+        force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 
+                                                  last_week_force_index_7_week, last_week_force_index_52_week, 
+                                                  prev_alert_state)
+        
+        return {
+            'force_index_7_week': float(force_index_7_week),
+            'force_index_52_week': float(force_index_52_week),
+            'last_week_force_index_7_week': float(last_week_force_index_7_week),
+            'last_week_force_index_52_week': float(last_week_force_index_52_week),
+            'force_index_alert_state': force_index_alert_state
+        }
+    def _get_previous_alert_state(self, symbol):
+        conn = psycopg2.connect(**self.db_connection_params)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT force_index_alert_state 
+            FROM force_index_table 
+            WHERE stock = %s 
+            ORDER BY time DESC 
+            LIMIT 1
+        """, (symbol,))
+        
+        result = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        return result[0] if result else None
+
+    def _determine_alert_state(self, fi_7_week, fi_52_week, last_fi_7_week, last_fi_52_week, prev_state):
+        # Check for upward crossover
+        upward_crossover = (last_fi_7_week <= last_fi_52_week) and (fi_7_week > fi_52_week)
+        
+        # Check for downward crossover
+        downward_crossover = (last_fi_7_week >= last_fi_52_week) and (fi_7_week < fi_52_week)
+        
+        if upward_crossover or downward_crossover:
+            if prev_state in ['$$$', '$']:
+                return '$'  # Continue the alert state if it was already $$$ or $
+            else:
+                return '$$$'  # New crossover (either direction)
+        else:
+            return '-'  # No crossover
+
+####################################################################################################################
 
 def get_transformer(source: str, db_params=None) -> BaseTransformer:
     if source.lower() == 'twelvedata_screener':
         return TwelveDataScreenerTransformer()
     elif source.lower() == 'williams_r':
         return WilliamsRTransformer(db_params)
+    elif source.lower() == 'force_index':
+        return ForceIndexTransformer(db_params)
     else:
         raise ValueError(f"Unsupported data source: {source}")

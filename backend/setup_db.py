@@ -41,8 +41,7 @@ def setup_database():
             roce NUMERIC,
             discounted_cash_flow NUMERIC,
             ema NUMERIC,
-            force_index NUMERIC,
-            williams_percent_r NUMERIC
+            williams_r NUMERIC
         );
     """)
 
@@ -64,8 +63,7 @@ def setup_database():
         CREATE INDEX IF NOT EXISTS idx_screener_roce ON screener_table (roce);
         CREATE INDEX IF NOT EXISTS idx_screener_dcf ON screener_table (discounted_cash_flow);
         CREATE INDEX IF NOT EXISTS idx_screener_ema ON screener_table (ema);
-        CREATE INDEX IF NOT EXISTS idx_screener_force_index ON screener_table (force_index);
-        CREATE INDEX IF NOT EXISTS idx_screener_williams_r ON screener_table (williams_percent_r);
+        CREATE INDEX IF NOT EXISTS idx_screener_williams_r ON screener_table (williams_r);
     """)
 
     # Create williams_r_table (new table)
@@ -75,7 +73,7 @@ def setup_database():
             stock TEXT NOT NULL,
             williams_r NUMERIC,
             williams_r_ema NUMERIC,
-            alert_state TEXT
+            williams_r_momentum_alert_state TEXT
         );
     """)
 
@@ -89,17 +87,46 @@ def setup_database():
         CREATE INDEX IF NOT EXISTS idx_williams_r_stock ON williams_r_table (stock);
     """)
 
-    # Modify screener_table to include williams_r_ema and alert_state
+   # Create force_index_table (new table)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS force_index_table (
+            time TIMESTAMPTZ NOT NULL,
+            stock TEXT NOT NULL,
+            force_index_7_week NUMERIC,
+            force_index_52_week NUMERIC,
+            last_week_force_index_7_week NUMERIC,
+            last_week_force_index_52_week NUMERIC,
+            force_index_alert_state TEXT
+        );
+    """)
+
+    # Create hypertable for force_index_table
+    cur.execute("""
+        SELECT create_hypertable('force_index_table', 'time', if_not_exists => TRUE);
+    """)
+
+    # Create index for efficient querying on force_index_table
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_force_index_stock ON force_index_table (stock);
+    """)
+
+    # Modify screener_table to include williams_r_ema, force_index_alert_state, and force index columns
     cur.execute("""
         ALTER TABLE screener_table
         ADD COLUMN IF NOT EXISTS williams_r_ema NUMERIC,
-        ADD COLUMN IF NOT EXISTS alert_state TEXT;
+        ADD COLUMN IF NOT EXISTS williams_r_momentum_alert_state TEXT,
+        ADD COLUMN IF NOT EXISTS force_index_7_week NUMERIC,
+        ADD COLUMN IF NOT EXISTS force_index_52_week NUMERIC,
+        ADD COLUMN IF NOT EXISTS force_index_alert_state TEXT;
     """)
 
     # Create indexes for new columns in screener_table
     cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_screener_williams_r_ema ON screener_table (williams_r_ema);
-        CREATE INDEX IF NOT EXISTS idx_screener_alert_state ON screener_table (alert_state);
+        CREATE INDEX IF NOT EXISTS idx_screener_williams_r_momentum_alert_state ON screener_table (williams_r_momentum_alert_state);
+        CREATE INDEX IF NOT EXISTS idx_screener_force_index_7_week ON screener_table (force_index_7_week);
+        CREATE INDEX IF NOT EXISTS idx_screener_force_index_52_week ON screener_table (force_index_52_week);
+        CREATE INDEX IF NOT EXISTS idx_screener_force_index_alert_state ON screener_table (force_index_alert_state);
     """)
 
     conn.commit()

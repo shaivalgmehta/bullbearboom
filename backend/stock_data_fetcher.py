@@ -34,6 +34,7 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 # Initialize TwelveData client
 td = TDClient(apikey=TWELVE_DATA_API_KEY)
 
+######################### DEFINE FUNCTIONS TO FETCH DATA FROM TWELVE DATA #############################
 def fetch_stock_list_twelve_data(symbol):
     url = f"https://api.twelvedata.com/stocks?symbol={symbol}&exchange=NASDAQ&apikey={TWELVE_DATA_API_KEY}"
     response = requests.get(url)
@@ -50,6 +51,7 @@ def fetch_technical_indicators_twelve_data(symbol):
     technical_indicator = td.time_series(
         symbol=symbol,
         interval="1day",
+        exchange="NASDAQ",
         outputsize=1
     ).with_ema(
         time_period=200
@@ -60,11 +62,51 @@ def fetch_williams_r_twelve_data(symbol):
     williams_r = td.time_series(
         symbol=symbol,
         interval="1week",
+        exchange="NASDAQ",
         outputsize =21
     ).with_willr(
         time_period=52
     ).without_ohlc().as_json()
     return williams_r
+
+def fetch_force_index_data(symbol):
+    # Fetch 54 weeks of data to calculate both current and last week's averages
+    time_series = td.time_series(
+        symbol=symbol,
+        interval="1week",
+        exchange="NASDAQ",
+        outputsize=55
+    ).as_json()
+    
+    return time_series
+
+######################### DEFINE FUNCTIONS TO STORE DATA IN TIMESCALE DB #############################
+
+def store_force_index_data(data, symbol):
+    conn = psycopg2.connect(**db_params)
+    cur = conn.cursor()
+
+    values = [(
+        datetime.now(),
+        symbol,
+        data['force_index_7_week'],
+        data['force_index_52_week'],
+        data['last_week_force_index_7_week'],
+        data['last_week_force_index_52_week'],
+        data['force_index_alert_state']
+    )]
+
+    execute_values(cur, """
+        INSERT INTO force_index_table (
+            time, stock, force_index_7_week, force_index_52_week,
+            last_week_force_index_7_week, last_week_force_index_52_week, force_index_alert_state
+        ) VALUES %s
+    """, values)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
 
 def store_williams_r_data(data, symbol):
     conn = psycopg2.connect(
@@ -81,12 +123,12 @@ def store_williams_r_data(data, symbol):
         symbol,
         data['williams_r'],
         data['williams_r_ema'],
-        data['alert_state']
+        data['williams_r_momentum_alert_state']
     )]
 
     execute_values(cur, """
         INSERT INTO williams_r_table (
-            time, stock, williams_r, williams_r_ema, alert_state
+            time, stock, williams_r, williams_r_ema, williams_r_momentum_alert_state
         ) VALUES %s
     """, values)
 
@@ -117,14 +159,18 @@ def store_stock_data(data):
         data['ema'],
         data['williams_r'],
         data['williams_r_ema'],
-        data['alert_state']
+        data['williams_r_momentum_alert_state'],
+        data['force_index_7_week'],
+        data['force_index_52_week'],
+        data['force_index_alert_state'],
     )]
 
     execute_values(cur, """
         INSERT INTO screener_table (
             time, stock, market_cap, pe_ratio, ev_ebitda, pb_ratio, 
             peg_ratio, current_year_sales, current_year_ebitda, ema,
-            williams_r, williams_r_ema, alert_state
+            williams_r, williams_r_ema, williams_r_momentum_alert_state,
+            force_index_7_week, force_index_52_week, force_index_alert_state
         ) VALUES %s
     """, values)
 
@@ -132,8 +178,10 @@ def store_stock_data(data):
     cur.close()
     conn.close()
 
+######################### DEFINE MAIN PROCESS TO EXECUTE ############################# 
+
 def main():
-    symbol = "TSLA"  # Hardcoded for now
+    symbol = "AAPL"  # Hardcoded for now
     
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data(symbol)
@@ -141,6 +189,7 @@ def main():
     # Get the appropriate transformers
     screener_transformer = get_transformer('twelvedata_screener')
     williams_r_transformer = get_transformer('williams_r', db_params)
+    force_index_transformer = get_transformer('force_index', db_params)
 
     
     for stock in stocks:
@@ -151,27 +200,33 @@ def main():
         statistics = fetch_stock_statistics_twelve_data(symbol)
         technical_indicator = fetch_technical_indicators_twelve_data(symbol)
         williams_r_data = fetch_williams_r_twelve_data(symbol)
+        force_index_data = fetch_force_index_data(symbol)
+
 
         williams_r_transformed_data = williams_r_transformer.transform(williams_r_data,symbol)
         print(json.dumps(williams_r_transformed_data, indent=2))  # Pretty print the JSON data
 
-        store_williams_r_data(williams_r_transformed_data, symbol)
-
+        force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol)
+        print(json.dumps(force_index_transformed_data, indent=2))  # Pretty print the JSON data
 
         # Combine all data
         combined_data = {
             'stock_data': stock_data,
             'statistics': statistics,
             'technical_indicator': technical_indicator,
-            'williams_r_transformed_data': williams_r_transformed_data
+            'williams_r_transformed_data': williams_r_transformed_data,
+            'force_index_transformed_data': force_index_transformed_data
+
         }
         
         # Transform the data for screener
-        transformed_data = screener_transformer.transform(combined_data)[0]
-        print(json.dumps(transformed_data, indent=2))
+        stock_transformed_data = screener_transformer.transform(combined_data)[0]
+        print(json.dumps(stock_transformed_data, indent=2))
 
         # Store the transformed data
-        store_stock_data(transformed_data)
+        store_force_index_data(force_index_transformed_data, symbol)
+        store_williams_r_data(williams_r_transformed_data, symbol)
+        store_stock_data(stock_transformed_data)
         
         print(f"Data for {symbol} has been stored in TimescaleDB")
 

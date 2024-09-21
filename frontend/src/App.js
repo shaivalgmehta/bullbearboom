@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, IconButton, List, ListItem,
-  Divider, useMediaQuery, useTheme, Grid
+  Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup, FormControlLabel
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -19,17 +19,26 @@ const columnMap = {
   'peg_ratio': 'PEG Ratio',
   'current_year_sales': 'Current Year Sales',
   'current_year_ebitda': 'Current Year EBITDA',
+  'ema': 'EMA',
+  'williams_r': 'Williams %R',
+  'williams_r_ema': 'Williams %R EMA',
+  'williams_r_momentum_alert_state': 'Williams %R Momentum Alert',
+  'force_index_7_week': '7-Week Force Index',
+  'force_index_52_week': '52-Week Force Index',
+  'force_index_alert_state': 'Force Index Alert',
   'time': 'Time'
 };
 
 const filterColumns = [
   'market_cap', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
-  'peg_ratio', 'current_year_sales', 'current_year_ebitda'
+  'peg_ratio', 'current_year_sales', 'current_year_ebitda', 'ema'
 ];
+
+const alertStateOptions = ['$', '$$$', '-'];
 
 const drawerWidth = 300;
 
-// Formatting functions
+// Formatting functions (unchanged)
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return 'N/A';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
@@ -55,6 +64,11 @@ const formatColumnValue = (column, value) => {
     case 'ev_ebitda':
     case 'pb_ratio':
     case 'peg_ratio':
+    case 'ema':
+    case 'williams_r':
+    case 'williams_r_ema':
+    case 'force_index_7_week':
+    case 'force_index_52_week':
       return formatRatio(value);
     case 'time':
       return new Date(value).toLocaleString();
@@ -67,6 +81,10 @@ function App() {
   const [stockData, setStockData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({});
+  const [alertStateFilters, setAlertStateFilters] = useState({
+    williams_r_momentum_alert_state: [],
+    force_index_alert_state: []
+  });
   const [drawerOpen, setDrawerOpen] = useState(true);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -92,6 +110,15 @@ function App() {
     }));
   };
 
+  const handleAlertStateFilterChange = (column, value) => {
+    setAlertStateFilters(prevFilters => ({
+      ...prevFilters,
+      [column]: prevFilters[column].includes(value)
+        ? prevFilters[column].filter(v => v !== value)
+        : [...prevFilters[column], value]
+    }));
+  };
+
   const applyFilters = () => {
     const filtered = stockData.filter(stock => {
       return Object.entries(filters).every(([column, { min, max }]) => {
@@ -100,6 +127,8 @@ function App() {
         if (min) return value >= min;
         if (max) return value <= max;
         return true;
+      }) && Object.entries(alertStateFilters).every(([column, selectedStates]) => {
+        return selectedStates.length === 0 || selectedStates.includes(stock[column]);
       });
     });
     setFilteredData(filtered);
@@ -144,6 +173,27 @@ function App() {
                 />
               </Grid>
             </Grid>
+          </ListItem>
+        ))}
+        {['williams_r_momentum_alert_state', 'force_index_alert_state'].map((column) => (
+          <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+              {columnMap[column]}
+            </Typography>
+            <FormGroup>
+              {alertStateOptions.map((option) => (
+                <FormControlLabel
+                  key={option}
+                  control={
+                    <Checkbox
+                      checked={alertStateFilters[column].includes(option)}
+                      onChange={() => handleAlertStateFilterChange(column, option)}
+                    />
+                  }
+                  label={option}
+                />
+              ))}
+            </FormGroup>
           </ListItem>
         ))}
       </List>
