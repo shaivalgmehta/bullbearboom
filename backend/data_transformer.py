@@ -143,12 +143,12 @@ class ForceIndexTransformer(BaseTransformer):
         df['force_index'] = (df['close'] - df['close'].shift(1)) * df['volume']
         
          # Calculate 7-week and 52-week SMAs
-        force_index_7_week = df['force_index'].rolling(window=7).mean().iloc[-1]
-        force_index_52_week = df['force_index'].rolling(window=52).mean().iloc[-1]
+        force_index_7_week = df['force_index'].ewm(span=7, adjust=False).mean().iloc[-1]
+        force_index_52_week = df['force_index'].ewm(span=52, adjust=False).mean().iloc[-1]
         
         # Calculate last week's SMAs
-        last_week_force_index_7_week = df['force_index'].rolling(window=7).mean().iloc[-2]
-        last_week_force_index_52_week = df['force_index'].rolling(window=52).mean().iloc[-2]
+        last_week_force_index_7_week = df['force_index'].ewm(span=7, adjust=False).mean().iloc[-2]
+        last_week_force_index_52_week = df['force_index'].ewm(span=52, adjust=False).mean().iloc[-2]
         
         # Determine alert state
         prev_alert_state = self._get_previous_alert_state(symbol)

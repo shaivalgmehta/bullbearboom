@@ -19,7 +19,7 @@ const columnMap = {
   'peg_ratio': 'PEG Ratio',
   'current_year_sales': 'Current Year Sales',
   'current_year_ebitda': 'Current Year EBITDA',
-  'ema': 'EMA',
+  'ema': '200-EMA',
   'williams_r': 'Williams %R',
   'williams_r_ema': 'Williams %R EMA',
   'williams_r_momentum_alert_state': 'Williams %R Momentum Alert',
