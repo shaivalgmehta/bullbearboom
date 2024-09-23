@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+  Table, TableBody, TableCell, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, IconButton, List, ListItem,
   Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup, FormControlLabel
 } from '@mui/material';
@@ -94,7 +94,7 @@ function App() {
     williams_r_momentum_alert_state: [],
     force_index_alert_state: []
   });
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -252,10 +252,10 @@ function App() {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', p: 2 }}>
       <Drawer
         variant={isMobile ? "temporary" : "persistent"}
-        open={isMobile ? drawerOpen : drawerOpen}
+        open={drawerOpen}
         onClose={toggleDrawer}
         sx={{
           width: drawerWidth,
@@ -272,9 +272,7 @@ function App() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          marginLeft: drawerOpen ? `${drawerWidth}px` : 0,
+          width: '100%',
           transition: theme.transitions.create(['margin', 'width'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
@@ -292,65 +290,68 @@ function App() {
             <MenuIcon />
           </IconButton>
           <Typography variant="h4" component="h1">
-            Stock Data
+            Bull Bear Boom
           </Typography>
         </Box>
 
-        <TableContainer component={Paper} sx={{ maxWidth: '100%', overflowX: 'auto' }}>
-          <Table sx={{ minWidth: 650 }} size="small" aria-label="stock data table">
-            <TableHead>
-              <TableRow>
-                {Object.entries(columnMap).map(([key, value]) => (
+        <Table component={Paper} sx={{ width: '100%', overflowX: 'unset' }}>
+          <TableHead>
+            <TableRow>
+              {Object.entries(columnMap).map(([key, value]) => (
+                <TableCell 
+                  key={key} 
+                  align="center"
+                  sx={{ 
+                    whiteSpace: 'nowrap', 
+                    padding: '8px 12px',
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold',
+                    backgroundColor: '#f8f9fa',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {value}
+                    {numericalColumns.includes(key) && (
+                      <IconButton size="small" onClick={() => requestSort(key)}>
+                        {sortConfig.key === key ? (
+                          sortConfig.direction === 'ascending' ? (
+                            <ArrowUpwardIcon fontSize="inherit" />
+                          ) : (
+                            <ArrowDownwardIcon fontSize="inherit" />
+                          )
+                        ) : (
+                          <ArrowUpwardIcon fontSize="inherit" color="disabled" />
+                        )}
+                      </IconButton>
+                    )}
+                  </Box>
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {sortedData.map((stock, index) => (
+              <TableRow key={index} hover>
+                {Object.keys(columnMap).map((column, colIndex) => (
                   <TableCell 
-                    key={key} 
+                    key={colIndex} 
                     align="center"
                     sx={{ 
                       whiteSpace: 'nowrap', 
-                      padding: '6px 4px',
-                      fontSize: '0.75rem'
+                      padding: '8px 12px',
+                      fontSize: '0.85rem'
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {value}
-                      {numericalColumns.includes(key) && (
-                        <IconButton size="small" onClick={() => requestSort(key)}>
-                          {sortConfig.key === key ? (
-                            sortConfig.direction === 'ascending' ? (
-                              <ArrowUpwardIcon fontSize="inherit" />
-                            ) : (
-                              <ArrowDownwardIcon fontSize="inherit" />
-                            )
-                          ) : (
-                            <ArrowUpwardIcon fontSize="inherit" color="disabled" />
-                          )}
-                        </IconButton>
-                      )}
-                    </Box>
+                    {formatColumnValue(column, stock[column])}
                   </TableCell>
                 ))}
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedData.map((stock, index) => (
-                <TableRow key={index}>
-                  {Object.keys(columnMap).map((column, colIndex) => (
-                    <TableCell 
-                      key={colIndex} 
-                      align="center"
-                      sx={{ 
-                        whiteSpace: 'nowrap', 
-                        padding: '6px 4px',
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      {formatColumnValue(column, stock[column])}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            ))}
+          </TableBody>
+        </Table>
       </Box>
     </Box>
   );
