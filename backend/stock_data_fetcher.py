@@ -55,7 +55,7 @@ def fetch_technical_indicators_twelve_data(symbol):
         outputsize=1
     ).with_ema(
         time_period=200
-    ).without_ohlc().as_json()
+    ).as_json()
     return technical_indicator
 
 def fetch_williams_r_twelve_data(symbol):
@@ -157,6 +157,7 @@ def store_stock_data(data):
         data['current_year_sales'],
         data['current_year_ebitda'],
         data['ema'],
+        data['closing_price'],
         data['williams_r'],
         data['williams_r_ema'],
         data['williams_r_momentum_alert_state'],
@@ -168,7 +169,7 @@ def store_stock_data(data):
     execute_values(cur, """
         INSERT INTO screener_table (
             time, stock, market_cap, pe_ratio, ev_ebitda, pb_ratio, 
-            peg_ratio, current_year_sales, current_year_ebitda, ema,
+            peg_ratio, current_year_sales, current_year_ebitda, ema, closing_price,
             williams_r, williams_r_ema, williams_r_momentum_alert_state,
             force_index_7_week, force_index_52_week, force_index_alert_state
         ) VALUES %s
@@ -181,7 +182,7 @@ def store_stock_data(data):
 ######################### DEFINE MAIN PROCESS TO EXECUTE ############################# 
 
 def main():
-    symbol = "AAPL"  # Hardcoded for now
+    symbol = "TSLA"  # Hardcoded for now
     
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data(symbol)
@@ -201,7 +202,6 @@ def main():
         technical_indicator = fetch_technical_indicators_twelve_data(symbol)
         williams_r_data = fetch_williams_r_twelve_data(symbol)
         force_index_data = fetch_force_index_data(symbol)
-
 
         williams_r_transformed_data = williams_r_transformer.transform(williams_r_data,symbol)
         print(json.dumps(williams_r_transformed_data, indent=2))  # Pretty print the JSON data

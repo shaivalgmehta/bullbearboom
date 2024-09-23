@@ -29,6 +29,7 @@ class TwelveDataScreenerTransformer(BaseTransformer):
             'current_year_sales': self._parse_numeric(statistics['statistics']['financials']['income_statement']['revenue_ttm']),
             'current_year_ebitda': self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda']),
             'ema': self._parse_numeric(technical_indicator[0]['ema']),
+            'closing_price': self._parse_numeric(technical_indicator[0]['close']),
             'williams_r': self._parse_numeric(williams_r_transformed_data['williams_r']),
             'williams_r_ema': self._parse_numeric(williams_r_transformed_data['williams_r_ema']),
             'williams_r_momentum_alert_state': williams_r_transformed_data['williams_r_momentum_alert_state'],
