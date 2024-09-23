@@ -7,12 +7,15 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const columnMap = {
   'stock': 'Stock',
   'market_cap': 'Market Cap',
+  'closing_price': 'Last Day Closing Price',
   'pe_ratio': 'P/E Ratio',
   'ev_ebitda': 'EV/EBITDA',
   'pb_ratio': 'P/B Ratio',
@@ -29,6 +32,12 @@ const columnMap = {
   'time': 'Time'
 };
 
+const numericalColumns = [
+  'market_cap', 'closing_price', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
+  'peg_ratio', 'current_year_sales', 'current_year_ebitda', 'ema',
+  'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week'
+];
+
 const filterColumns = [
   'market_cap', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
   'peg_ratio', 'current_year_sales', 'current_year_ebitda', 'ema'
@@ -38,10 +47,9 @@ const alertStateOptions = ['$', '$$$', '-'];
 
 const drawerWidth = 300;
 
-// Formatting functions (unchanged)
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
 };
 
 const formatRatio = (value) => {
@@ -59,6 +67,7 @@ const formatColumnValue = (column, value) => {
     case 'market_cap':
     case 'current_year_sales':
     case 'current_year_ebitda':
+    case 'closing_price':
       return formatCurrency(value);
     case 'pe_ratio':
     case 'ev_ebitda':
@@ -86,6 +95,7 @@ function App() {
     force_index_alert_state: []
   });
   const [drawerOpen, setDrawerOpen] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -135,9 +145,42 @@ function App() {
     if (isMobile) setDrawerOpen(false);
   };
 
+  const clearFilters = () => {
+    setFilters({});
+    setAlertStateFilters({
+      williams_r_momentum_alert_state: [],
+      force_index_alert_state: []
+    });
+    setFilteredData(stockData);
+  };
+
   const toggleDrawer = () => {
     setDrawerOpen(!drawerOpen);
   };
+
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedData = React.useMemo(() => {
+    let sortableItems = [...filteredData];
+    if (sortConfig.key !== null) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredData, sortConfig]);
 
   const drawer = (
     <Box sx={{ p: 2 }}>
@@ -198,8 +241,11 @@ function App() {
         ))}
       </List>
       <Box sx={{ mt: 2 }}>
-        <Button variant="contained" fullWidth onClick={applyFilters}>
+        <Button variant="contained" fullWidth onClick={applyFilters} sx={{ mb: 1 }}>
           Apply Filters
+        </Button>
+        <Button variant="outlined" fullWidth onClick={clearFilters}>
+          Clear Filters
         </Button>
       </Box>
     </Box>
@@ -250,20 +296,53 @@ function App() {
           </Typography>
         </Box>
 
-        <TableContainer component={Paper}>
-          <Table sx={{ minWidth: 650 }} aria-label="stock data table">
+        <TableContainer component={Paper} sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+          <Table sx={{ minWidth: 650 }} size="small" aria-label="stock data table">
             <TableHead>
               <TableRow>
-                {Object.values(columnMap).map((columnName, index) => (
-                  <TableCell key={index}>{columnName}</TableCell>
+                {Object.entries(columnMap).map(([key, value]) => (
+                  <TableCell 
+                    key={key} 
+                    align="center"
+                    sx={{ 
+                      whiteSpace: 'nowrap', 
+                      padding: '6px 4px',
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {value}
+                      {numericalColumns.includes(key) && (
+                        <IconButton size="small" onClick={() => requestSort(key)}>
+                          {sortConfig.key === key ? (
+                            sortConfig.direction === 'ascending' ? (
+                              <ArrowUpwardIcon fontSize="inherit" />
+                            ) : (
+                              <ArrowDownwardIcon fontSize="inherit" />
+                            )
+                          ) : (
+                            <ArrowUpwardIcon fontSize="inherit" color="disabled" />
+                          )}
+                        </IconButton>
+                      )}
+                    </Box>
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredData.map((stock, index) => (
+              {sortedData.map((stock, index) => (
                 <TableRow key={index}>
                   {Object.keys(columnMap).map((column, colIndex) => (
-                    <TableCell key={colIndex}>
+                    <TableCell 
+                      key={colIndex} 
+                      align="center"
+                      sx={{ 
+                        whiteSpace: 'nowrap', 
+                        padding: '6px 4px',
+                        fontSize: '0.75rem'
+                      }}
+                    >
                       {formatColumnValue(column, stock[column])}
                     </TableCell>
                   ))}
