@@ -118,7 +118,8 @@ def setup_database():
         ADD COLUMN IF NOT EXISTS force_index_7_week NUMERIC,
         ADD COLUMN IF NOT EXISTS force_index_52_week NUMERIC,
         ADD COLUMN IF NOT EXISTS force_index_alert_state TEXT,
-        ADD COLUMN IF NOT EXISTS closing_price NUMERIC;
+        ADD COLUMN IF NOT EXISTS closing_price NUMERIC,
+        ADD COLUMN IF NOT EXISTS stock_name TEXT;
     """)
 
     # Create indexes for new columns in screener_table
@@ -129,6 +130,8 @@ def setup_database():
         CREATE INDEX IF NOT EXISTS idx_screener_force_index_52_week ON screener_table (force_index_52_week);
         CREATE INDEX IF NOT EXISTS idx_screener_force_index_alert_state ON screener_table (force_index_alert_state);
         CREATE INDEX IF NOT EXISTS idx_screener_force_index_alert_state ON screener_table (closing_price);
+        CREATE INDEX IF NOT EXISTS idx_screener_stock_name ON screener_table (stock_name);
+
     """)
 
     conn.commit()

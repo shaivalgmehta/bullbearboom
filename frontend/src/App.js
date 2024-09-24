@@ -14,6 +14,7 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const columnMap = {
   'stock': 'Stock',
+  'stock_name': 'Stock Name',
   'market_cap': 'Market Cap',
   'closing_price': 'Last Day Closing Price',
   'pe_ratio': 'P/E Ratio',
@@ -300,7 +301,7 @@ function App() {
               {Object.entries(columnMap).map(([key, value]) => (
                 <TableCell 
                   key={key} 
-                  align="center"
+                  align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
                   sx={{ 
                     whiteSpace: 'nowrap', 
                     padding: '8px 12px',
@@ -312,7 +313,7 @@ function App() {
                     zIndex: 1
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" }}>
                     {value}
                     {numericalColumns.includes(key) && (
                       <IconButton size="small" onClick={() => requestSort(key)}>
@@ -338,7 +339,7 @@ function App() {
                 {Object.keys(columnMap).map((column, colIndex) => (
                   <TableCell 
                     key={colIndex} 
-                    align="center"
+                    align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
                     sx={{ 
                       whiteSpace: 'nowrap', 
                       padding: '8px 12px',

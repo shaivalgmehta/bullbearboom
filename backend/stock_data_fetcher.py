@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from twelvedata import TDClient
 from data_transformer import get_transformer
 import json  # Import json for pretty printing
+import time
 
 
 # Load environment variables
@@ -35,8 +36,8 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 td = TDClient(apikey=TWELVE_DATA_API_KEY)
 
 ######################### DEFINE FUNCTIONS TO FETCH DATA FROM TWELVE DATA #############################
-def fetch_stock_list_twelve_data(symbol):
-    url = f"https://api.twelvedata.com/stocks?symbol={symbol}&exchange=NASDAQ&apikey={TWELVE_DATA_API_KEY}"
+def fetch_stock_list_twelve_data():
+    url = f"https://api.twelvedata.com/stocks?country=United States&type=Common Stock&apikey={TWELVE_DATA_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json().get('data', [])
@@ -44,14 +45,15 @@ def fetch_stock_list_twelve_data(symbol):
         raise Exception(f"Error fetching stock list: {response.status_code}")
 
 def fetch_stock_statistics_twelve_data(symbol):
-    statistics = td.get_statistics(symbol=symbol).as_json()
+    statistics = td.get_statistics(symbol=symbol, country="United States").as_json()
     return statistics
 
 def fetch_technical_indicators_twelve_data(symbol):
     technical_indicator = td.time_series(
         symbol=symbol,
         interval="1day",
-        exchange="NASDAQ",
+        country="United States",
+        type="Common Stock",
         outputsize=1
     ).with_ema(
         time_period=200
@@ -62,7 +64,8 @@ def fetch_williams_r_twelve_data(symbol):
     williams_r = td.time_series(
         symbol=symbol,
         interval="1week",
-        exchange="NASDAQ",
+        country="United States",
+        type="Common Stock",
         outputsize =21
     ).with_willr(
         time_period=52
@@ -74,7 +77,8 @@ def fetch_force_index_data(symbol):
     time_series = td.time_series(
         symbol=symbol,
         interval="1week",
-        exchange="NASDAQ",
+        country="United States",
+        type="Common Stock",
         outputsize=55
     ).as_json()
     
@@ -149,6 +153,7 @@ def store_stock_data(data):
     values = [(
         datetime.now(),
         data['stock'],
+        data['stock_name'],
         data['market_cap'],
         data['pe_ratio'],
         data['ev_ebitda'],
@@ -168,7 +173,7 @@ def store_stock_data(data):
 
     execute_values(cur, """
         INSERT INTO screener_table (
-            time, stock, market_cap, pe_ratio, ev_ebitda, pb_ratio, 
+            time, stock, stock_name, market_cap, pe_ratio, ev_ebitda, pb_ratio, 
             peg_ratio, current_year_sales, current_year_ebitda, ema, closing_price,
             williams_r, williams_r_ema, williams_r_momentum_alert_state,
             force_index_7_week, force_index_52_week, force_index_alert_state
@@ -179,49 +184,32 @@ def store_stock_data(data):
     cur.close()
     conn.close()
 
-######################### DEFINE MAIN PROCESS TO EXECUTE ############################# 
+######################### DEFINE PROCESS TO GET DATA FOR EACH STOCK ##################
 
-def main():
-    symbol = "TSLA"  # Hardcoded for now
+def process_stock(stock):
+    symbol = stock['symbol']
     
-    # Fetch stock list
-    stocks = fetch_stock_list_twelve_data(symbol)
-    
-    # Get the appropriate transformers
-    screener_transformer = get_transformer('twelvedata_screener')
-    williams_r_transformer = get_transformer('williams_r', db_params)
-    force_index_transformer = get_transformer('force_index', db_params)
-
-    
-    for stock in stocks:
-        symbol = stock['symbol']
-        
+    try:
         # Fetch all required data
-        stock_data = stock
         statistics = fetch_stock_statistics_twelve_data(symbol)
         technical_indicator = fetch_technical_indicators_twelve_data(symbol)
         williams_r_data = fetch_williams_r_twelve_data(symbol)
         force_index_data = fetch_force_index_data(symbol)
 
-        williams_r_transformed_data = williams_r_transformer.transform(williams_r_data,symbol)
-        print(json.dumps(williams_r_transformed_data, indent=2))  # Pretty print the JSON data
-
+        williams_r_transformed_data = williams_r_transformer.transform(williams_r_data, symbol)
         force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol)
-        print(json.dumps(force_index_transformed_data, indent=2))  # Pretty print the JSON data
 
         # Combine all data
         combined_data = {
-            'stock_data': stock_data,
+            'stock_data': stock,
             'statistics': statistics,
             'technical_indicator': technical_indicator,
             'williams_r_transformed_data': williams_r_transformed_data,
             'force_index_transformed_data': force_index_transformed_data
-
         }
         
         # Transform the data for screener
         stock_transformed_data = screener_transformer.transform(combined_data)[0]
-        print(json.dumps(stock_transformed_data, indent=2))
 
         # Store the transformed data
         store_force_index_data(force_index_transformed_data, symbol)
@@ -229,6 +217,51 @@ def main():
         store_stock_data(stock_transformed_data)
         
         print(f"Data for {symbol} has been stored in TimescaleDB")
+    except Exception as e:
+        print(f"Error processing {symbol}: {str(e)}")
+
+######################### DEFINE MAIN PROCESS TO EXECUTE ############################# 
+def process_stock_batch(batch):
+    for stock in batch:
+        process_stock(stock)
+
+def main():
+    # Fetch stock list
+    stocks = fetch_stock_list_twelve_data()
+    
+    # Limit to first 3 stocks
+    stocks = stocks[:15]
+
+      # Get the appropriate transformers
+    global screener_transformer, williams_r_transformer, force_index_transformer
+    screener_transformer = get_transformer('twelvedata_screener')
+    williams_r_transformer = get_transformer('williams_r', db_params)
+    force_index_transformer = get_transformer('force_index', db_params)
+
+    # Process stocks in batches of 10
+    batch_size = 10
+    for i in range(0, len(stocks), batch_size):
+        batch = stocks[i:i+batch_size]
+        
+        print(f"Processing batch {i//batch_size + 1} of {len(stocks)//batch_size + 1}")
+        print("Stocks in this batch:")
+        for stock in batch:
+            print(f"- {stock['symbol']}: {stock['name']}")
+        
+        start_time = time.time()
+        
+        process_stock_batch(batch)
+        
+        # Calculate time spent processing the batch
+        elapsed_time = time.time() - start_time
+        
+        # If processing took less than 60 seconds, wait for the remainder of the minute
+        if elapsed_time < 60:
+            time.sleep(60 - elapsed_time)
+        
+        print(f"Finished processing batch. Moving to next batch.\n")
+
+    print("All stocks have been processed.")
 
 if __name__ == "__main__":
     main()
