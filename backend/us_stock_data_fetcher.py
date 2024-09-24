@@ -5,7 +5,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from data_transformer import get_transformer
+from us_stock_data_transformer import get_transformer
 import json  # Import json for pretty printing
 import time
 
@@ -230,7 +230,7 @@ def main():
     stocks = fetch_stock_list_twelve_data()
     
     # Limit to first 3 stocks
-    stocks = stocks[:15]
+    stocks = stocks[:1]
 
       # Get the appropriate transformers
     global screener_transformer, williams_r_transformer, force_index_transformer
