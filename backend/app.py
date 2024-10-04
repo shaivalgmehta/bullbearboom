@@ -58,8 +58,8 @@ def get_latest_stock_data():
         
         query = """
             SELECT DISTINCT ON (stock) *
-            FROM screener_table
-            ORDER BY stock, time DESC
+            FROM us_screener_table
+            ORDER BY stock, datetime DESC
         """
         
         cur.execute(query)
@@ -72,6 +72,31 @@ def get_latest_stock_data():
         return jsonify(data)
     except Exception as e:
         logging.error(f"Error fetching latest stock data: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/latest')
+def get_latest_crypto_data():
+    logging.info("Fetching latest data for all cryptocurrencies")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT DISTINCT ON (stock) *
+            FROM crypto_screener_table
+            ORDER BY stock, datetime DESC
+        """
+        
+        cur.execute(query)
+        data = cur.fetchall()
+        
+        logging.info(f"Fetched latest data for {len(data)} cryptocurrencies")
+        cur.close()
+        conn.close()
+        
+        return jsonify(data)
+    except Exception as e:
+        logging.error(f"Error fetching latest crypto data: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(500)
