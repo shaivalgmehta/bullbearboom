@@ -305,7 +305,7 @@ function CryptoApp({ drawerOpen, toggleDrawer }) {
                 {visibleColumns.map((key) => (
                   <TableCell 
                     key={key} 
-                    align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
+                    align={key === 'stock' || key === 'crypto_name' ? "left" : "center"}
                     sx={{ 
                       whiteSpace: 'nowrap', 
                       padding: '8px 12px',
