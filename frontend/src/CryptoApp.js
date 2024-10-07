@@ -14,7 +14,7 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const columnMap = {
   'stock': 'Crypto',
-  'stock_name': 'Crypto Name',
+  'crypto_name': 'Crypto Name',
   'close': 'Last Price',
   'ema': '200-EMA',
   'williams_r': 'Williams %R',
@@ -259,10 +259,11 @@ function CryptoApp({ drawerOpen, toggleDrawer }) {
 
   return (
     <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100vh',
-    }}>
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: 'calc(100vh - 64px)', // Subtracting the AppBar height
+        overflow: 'hidden', // Prevent scrolling on this container
+      }}>
       <Drawer
         variant={isMobile ? "temporary" : "persistent"}
         open={drawerOpen}

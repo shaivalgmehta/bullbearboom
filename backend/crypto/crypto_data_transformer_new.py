@@ -19,6 +19,7 @@ class CoreDataTransformer(BaseTransformer):
                 'datetime': technical_indicator['datetime'],
                 'stock': stock_data['symbol'],
                 'stock_name': stock_data['name'],
+                'crypto_name': stock_data['crypto_name'],
                 'ema': self._parse_numeric(technical_indicator['ema']),
                 'open': self._parse_numeric(technical_indicator['open']),
                 'close': self._parse_numeric(technical_indicator['close']),

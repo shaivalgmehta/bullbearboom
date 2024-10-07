@@ -283,7 +283,8 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     <Box sx={{ 
       display: 'flex', 
       flexDirection: 'column', 
-      height: '100vh',
+      height: 'calc(100vh - 64px)', // Subtracting the AppBar height
+      overflow: 'hidden', // Prevent scrolling on this container
     }}>
       <Drawer
         variant={isMobile ? "temporary" : "persistent"}

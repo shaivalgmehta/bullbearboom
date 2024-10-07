@@ -32,10 +32,10 @@ def update_screener_table():
             # Step 2: Insert latest daily data (today or yesterday)
             cur.execute("""
                 INSERT INTO crypto_screener_table (
-                    datetime, stock, stock_name, close, ema
+                    datetime, stock, crypto_name, close, ema
                 )
                 SELECT DISTINCT ON (stock)
-                    datetime, stock, stock_name, close, ema
+                    datetime, stock, crypto_name, close, ema
                 FROM 
                     crypto_daily_table
                 WHERE 

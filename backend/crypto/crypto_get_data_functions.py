@@ -41,7 +41,7 @@ def fetch_stock_list_polygon():
         else:
             raise Exception(f"Error fetching stock list: {response.status_code}")
     
-    return [{'symbol': ticker['ticker'], 'name': ticker['name']} for ticker in all_tickers]
+    return [{'symbol': ticker['ticker'], 'name': ticker['name'], 'crypto_name': ticker['base_currency_name']} for ticker in all_tickers]
 
 def fetch_technical_indicators_polygon(symbol):
     end_date = datetime.now().strftime('%Y-%m-%d')
@@ -175,23 +175,23 @@ def store_stock_data(data):
         data['datetime'],
         data['stock'],
         data['stock_name'],
+        data['crypto_name'],
         data['ema'],
         data['open'],
         data['close'],
-        data['volume'],
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO crypto_daily_table (
-            datetime, stock, stock_name, ema, open, close, volume, last_modified_date
+            datetime, stock, stock_name, crypto_name, ema, open, close, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
+            crypto_name = EXCLUDED.crypto_name,
             ema = EXCLUDED.ema,
             open = EXCLUDED.open,
             close = EXCLUDED.close,
-            volume = EXCLUDED.volume,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 

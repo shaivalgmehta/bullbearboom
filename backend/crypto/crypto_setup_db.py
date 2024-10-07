@@ -33,7 +33,7 @@ def setup_database():
             create_table(cur, 'crypto_screener_table', """
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
-                stock_name TEXT,
+                crypto_name TEXT,
                 close NUMERIC,
                 ema NUMERIC,
                 williams_r NUMERIC,
@@ -52,6 +52,7 @@ def setup_database():
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
                 stock_name TEXT,
+                crypto_name TEXT,
                 open NUMERIC,
                 close NUMERIC,
                 ema NUMERIC,
@@ -75,6 +76,15 @@ def setup_database():
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_weekly_pkey PRIMARY KEY (datetime, stock)
             """)
+
+            # Create indexes for all tables
+            for table, columns in {
+                'crypto_screener_table': ['stock'],
+                'crypto_daily_table': ['stock', 'crypto_name'],
+                'crypto_weekly_table': ['stock']
+            }.items():
+                for column in columns:
+                    create_index(cur, table, column)
 
     print("Database schema set up successfully.")
 
