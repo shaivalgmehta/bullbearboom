@@ -4,6 +4,8 @@ from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
+#!/usr/bin/env python3
+
 # Load environment variables
 load_dotenv()
 
