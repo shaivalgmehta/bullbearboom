@@ -312,10 +312,10 @@ function CryptoApp({ drawerOpen, toggleDrawer }) {
                       fontSize: '0.9rem',
                       fontWeight: 'bold',
                       backgroundColor: '#f8f9fa',
-                      ...(key === 'stock_name' && { width: '200px' })
+                      ...(key === 'crypto_name' && { width: '200px' })
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'crypto_name' ? "flex-start" : "center" }}>
                       {columnMap[key]}
                       {numericalColumns.includes(key) && (
                         <Button size="small" onClick={() => requestSort(key)}>
@@ -341,7 +341,7 @@ function CryptoApp({ drawerOpen, toggleDrawer }) {
                   {visibleColumns.map((column, colIndex) => (
                     <TableCell 
                       key={colIndex} 
-                      align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
+                      align={column === 'stock' || column === 'crypto_name' ? "left" : "center"}
                       sx={{ 
                         whiteSpace: 'nowrap', 
                         padding: '8px 12px',
@@ -353,7 +353,7 @@ function CryptoApp({ drawerOpen, toggleDrawer }) {
                         })
                       }}
                     >
-                      {column === 'stock_name' ? (
+                      {column === 'crypto_name' ? (
                         <Tooltip title={crypto[column]} placement="top">
                           <span>{formatColumnValue(column, crypto[column])}</span>
                         </Tooltip>
