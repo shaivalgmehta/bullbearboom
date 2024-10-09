@@ -7,7 +7,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data
+from crypto_get_data_functions import fetch_stock_list_polygon_eth, fetch_technical_indicators_polygon_eth, fetch_williams_r_polygon_eth, fetch_force_index_data_eth, store_force_index_data_eth, store_williams_r_data_eth, store_stock_data_eth
 from crypto_data_transformer_new import get_transformer
 import json  # Import json for pretty printing
 import time
@@ -32,7 +32,7 @@ def process_stock(stock):
     try:
         
         # Fetch all required data
-        technical_indicator = fetch_technical_indicators_polygon(symbol)
+        technical_indicator = fetch_technical_indicators_polygon_eth(symbol)
         # print(f"\\nTechnical Indicator data for {symbol}:")
         # print(json.dumps(technical_indicator, indent=2))
 
@@ -46,7 +46,7 @@ def process_stock(stock):
         stock_transformed_data = stock_data_transformer.transform(combined_data)[0]
 
         # Store the transformed data
-        store_stock_data(stock_transformed_data)
+        store_stock_data_eth(stock_transformed_data)
         
         print(f"Data for {symbol} has been stored in TimescaleDB")
     except Exception as e:
@@ -60,14 +60,14 @@ def process_stock_batch(batch):
 
 def main():
     # Fetch stock list
-    stocks = fetch_stock_list_polygon()
+    stocks = fetch_stock_list_polygon_eth()
     
     # Limit to first 3 stocks
     # stocks = stocks[:1]
 
       # Get the appropriate transformers
     global stock_data_transformer
-    stock_data_transformer = get_transformer('core_data')
+    stock_data_transformer = get_transformer('core_data_eth')
   
     # Process stocks in batches of 10
     batch_size = 100

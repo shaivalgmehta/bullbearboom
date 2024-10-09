@@ -7,7 +7,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data
+from crypto_get_data_functions import fetch_stock_list_polygon_eth, fetch_technical_indicators_polygon_eth, fetch_williams_r_polygon_eth, fetch_force_index_data_eth, store_force_index_data_eth, store_williams_r_data_eth, store_stock_data_eth
 from crypto_data_transformer_new import get_transformer
 import json  # Import json for pretty printing
 import time
@@ -30,23 +30,17 @@ def process_stock(stock):
     symbol = stock['symbol']
     
     try:
-        
         # Fetch all required data
-        technical_indicator = fetch_technical_indicators_polygon(symbol)
-        # print(f"\\nTechnical Indicator data for {symbol}:")
-        # print(json.dumps(technical_indicator, indent=2))
+        williams_r_data = fetch_williams_r_polygon_eth(symbol)
+        force_index_data = fetch_force_index_data_eth(symbol)
 
-        # Combine data for daily table
-        combined_data = {
-            'stock_data': stock,
-            'technical_indicator': technical_indicator
-        }
-        
-        # Transform the data for daily table
-        stock_transformed_data = stock_data_transformer.transform(combined_data)[0]
+        williams_r_transformed_data = williams_r_transformer.transform(williams_r_data, symbol)
+        force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol)
+
 
         # Store the transformed data
-        store_stock_data(stock_transformed_data)
+        store_force_index_data_eth(force_index_transformed_data, symbol)
+        store_williams_r_data_eth(williams_r_transformed_data, symbol)
         
         print(f"Data for {symbol} has been stored in TimescaleDB")
     except Exception as e:
@@ -60,17 +54,18 @@ def process_stock_batch(batch):
 
 def main():
     # Fetch stock list
-    stocks = fetch_stock_list_polygon()
+    stocks = fetch_stock_list_polygon_eth()
     
     # Limit to first 3 stocks
     # stocks = stocks[:1]
 
       # Get the appropriate transformers
-    global stock_data_transformer
-    stock_data_transformer = get_transformer('core_data')
-  
+    global williams_r_transformer, force_index_transformer
+    williams_r_transformer = get_transformer('williams_r_eth', db_params)
+    force_index_transformer = get_transformer('force_index_eth', db_params)
+
     # Process stocks in batches of 10
-    batch_size = 100
+    batch_size = 800
     for i in range(0, len(stocks), batch_size):
         batch = stocks[i:i+batch_size]
         

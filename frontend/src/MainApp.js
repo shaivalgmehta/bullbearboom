@@ -4,6 +4,8 @@ import { AppBar, Toolbar, Typography, Button, Box, IconButton } from '@mui/mater
 import MenuIcon from '@mui/icons-material/Menu';
 import StockApp from './StockApp';
 import CryptoApp from './CryptoApp';
+import CryptoETHApp from './CryptoETHApp';
+
 
 function MainApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -35,6 +37,9 @@ function MainApp() {
             <Button color="inherit" component={Link} to="/crypto">
               Crypto
             </Button>
+            <Button color="inherit" component={Link} to="/crypto_eth">
+              Crypto ETH
+            </Button>
           </Toolbar>
         </AppBar>
 
@@ -42,6 +47,7 @@ function MainApp() {
           <Routes>
             <Route path="/" element={<StockApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="/crypto" element={<CryptoApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="/crypto_eth" element={<CryptoETHApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
           </Routes>
         </Box>
       </Box>

@@ -55,6 +55,7 @@ def setup_database():
                 crypto_name TEXT,
                 open NUMERIC,
                 close NUMERIC,
+                volume NUMERIC,
                 ema NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_daily_pkey PRIMARY KEY (datetime, stock)
@@ -77,11 +78,63 @@ def setup_database():
                 CONSTRAINT crypto_weekly_pkey PRIMARY KEY (datetime, stock)
             """)
 
+            # Create Crypto ETH screener_table
+            create_table(cur, 'crypto_screener_table_eth', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                crypto_name TEXT,
+                close NUMERIC,
+                ema NUMERIC,
+                williams_r NUMERIC,
+                williams_r_ema NUMERIC,
+                williams_r_momentum_alert_state TEXT,
+                force_index_7_week NUMERIC,
+                force_index_52_week NUMERIC,
+                force_index_alert_state TEXT,
+                CONSTRAINT crypto_screener_eth_pkey PRIMARY KEY (datetime, stock)
+
+            """)
+
+
+            # Create Crypto ETH daily time series table
+            create_table(cur, 'crypto_daily_table_eth', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                stock_name TEXT,
+                crypto_name TEXT,
+                open NUMERIC,
+                close NUMERIC,
+                volume NUMERIC,
+                ema NUMERIC,
+                last_modified_date TIMESTAMPTZ NOT NULL,
+                CONSTRAINT crypto_daily_eth_pkey PRIMARY KEY (datetime, stock)
+            """)
+
+
+            # Create Crypto ETH weekly time series table
+            create_table(cur, 'crypto_weekly_table_eth', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                williams_r NUMERIC,
+                williams_r_ema NUMERIC,
+                williams_r_momentum_alert_state TEXT,
+                force_index_7_week NUMERIC,
+                force_index_52_week NUMERIC,
+                last_week_force_index_7_week NUMERIC,
+                last_week_force_index_52_week NUMERIC,
+                force_index_alert_state TEXT,
+                last_modified_date TIMESTAMPTZ NOT NULL,
+                CONSTRAINT crypto_weekly_eth_pkey PRIMARY KEY (datetime, stock)
+            """)
+
             # Create indexes for all tables
             for table, columns in {
                 'crypto_screener_table': ['stock'],
                 'crypto_daily_table': ['stock', 'crypto_name'],
-                'crypto_weekly_table': ['stock']
+                'crypto_weekly_table': ['stock'],
+                'crypto_screener_table_eth': ['stock'],
+                'crypto_daily_table_eth': ['stock', 'crypto_name'],
+                'crypto_weekly_table_eth': ['stock']
             }.items():
                 for column in columns:
                     create_index(cur, table, column)
