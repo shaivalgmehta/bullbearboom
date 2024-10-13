@@ -124,6 +124,31 @@ def get_latest_crypto_eth_data():
         logging.error(f"Error fetching latest crypto data: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/crypto/latest_btc')
+def get_latest_crypto_btc_data():
+    logging.info("Fetching latest data for all cryptocurrencies")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT DISTINCT ON (stock) *
+            FROM crypto_screener_table_btc
+            ORDER BY stock, datetime DESC
+        """
+        
+        cur.execute(query)
+        data = cur.fetchall()
+        
+        logging.info(f"Fetched latest data for {len(data)} cryptocurrencies")
+        cur.close()
+        conn.close()
+        
+        return jsonify(data)
+    except Exception as e:
+        logging.error(f"Error fetching latest crypto data: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.errorhandler(500)
 def internal_error(error):
     logging.error(f"Internal error: {error}")

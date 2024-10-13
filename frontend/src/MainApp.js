@@ -5,6 +5,8 @@ import MenuIcon from '@mui/icons-material/Menu';
 import StockApp from './StockApp';
 import CryptoApp from './CryptoApp';
 import CryptoETHApp from './CryptoETHApp';
+import CryptoBTCApp from './CryptoBTCApp';
+
 
 
 function MainApp() {
@@ -40,6 +42,9 @@ function MainApp() {
             <Button color="inherit" component={Link} to="/crypto_eth">
               Crypto ETH
             </Button>
+            <Button color="inherit" component={Link} to="/crypto_btc">
+              Crypto BTC
+            </Button>
           </Toolbar>
         </AppBar>
 
@@ -48,6 +53,7 @@ function MainApp() {
             <Route path="/" element={<StockApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="/crypto" element={<CryptoApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="/crypto_eth" element={<CryptoETHApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="/crypto_btc" element={<CryptoBTCApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
           </Routes>
         </Box>
       </Box>
