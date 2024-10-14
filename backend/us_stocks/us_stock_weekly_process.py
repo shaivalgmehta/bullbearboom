@@ -54,8 +54,8 @@ def main():
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data()
     
-    # Limit to first 3 stocks
-    stocks = stocks[:1]
+    # # Limit to first 3 stocks
+    # stocks = stocks[:1]
 
       # Get the appropriate transformers
     global williams_r_transformer, force_index_transformer

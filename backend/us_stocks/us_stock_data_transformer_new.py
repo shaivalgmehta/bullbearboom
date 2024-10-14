@@ -63,7 +63,8 @@ class StatisticsDataTransformer(BaseTransformer):
                 'datetime': statistics['statistics']['financials']['most_recent_quarter'],
                 'stock': stock_data['symbol'],
                 'sales': self._parse_numeric(statistics['statistics']['financials']['income_statement']['revenue_ttm']),
-                'ebitda': self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda'])
+                'ebitda': self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda']),
+                'free_cash_flow': self._parse_numeric(statistics['statistics']['financials']['cash_flow']['operating_cash_flow_ttm'])
             }
             return [transformed_data]
         except KeyError as e:

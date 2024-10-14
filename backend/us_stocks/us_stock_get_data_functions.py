@@ -214,16 +214,18 @@ def store_statistics_data(data):
         data['stock'],
         data['sales'],
         data['ebitda'],
+        data['free_cash_flow'],
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO us_quarterly_table (
-            datetime, stock, sales, ebitda, last_modified_date
+            datetime, stock, sales, ebitda, free_cash_flow, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             sales = EXCLUDED.sales,
             ebitda = EXCLUDED.ebitda,
+            free_cash_flow = EXCLUDED.free_cash_flow,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 
