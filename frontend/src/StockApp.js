@@ -21,8 +21,13 @@ const columnMap = {
   'ev_ebitda': 'EV/EBITDA',
   'pb_ratio': 'P/B Ratio',
   'peg_ratio': 'PEG Ratio',
+  'last_quarter_sales': 'Last Quarter Sales',
   'current_quarter_sales': 'Current Quarter Sales',
+  'sales_change_percent': 'Sales % Change',
+  'last_quarter_ebitda': 'Last Quarter EBITDA',
   'current_quarter_ebitda': 'Current Quarter EBITDA',
+  'ebitda_change_percent': 'EBITDA % Change',
+  'free_cash_flow': 'Levered Free Cash Flow',
   'ema': '200-EMA',
   'williams_r': 'Williams %R',
   'williams_r_ema': 'Williams %R EMA',
@@ -35,7 +40,7 @@ const columnMap = {
 
 const numericalColumns = [
   'market_cap', 'close', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
-  'peg_ratio', 'current_quarter_sales', 'current_quarter_ebitda', 'ema',
+  'peg_ratio', 'current_quarter_sales', 'last_quarter_sales', 'current_quarter_ebitda', 'last_quarter_ebitda', 'ema',
   'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week'
 ];
 
@@ -68,6 +73,9 @@ const formatColumnValue = (column, value) => {
     case 'market_cap':
     case 'current_quarter_sales':
     case 'current_quarter_ebitda':
+    case 'last_quarter_sales':
+    case 'last_quarter_ebitda':
+    case 'free_cash_flow':
     case 'close':
       return formatCurrency(value);
     case 'pe_ratio':
@@ -80,6 +88,9 @@ const formatColumnValue = (column, value) => {
     case 'force_index_7_week':
     case 'force_index_52_week':
       return formatRatio(value);
+    case 'sales_change_percent':
+    case 'ebitda_change_percent':
+      return formatPercentage(value);
     case 'datetime':
       return new Date(value).toLocaleString();
     default:

@@ -24,7 +24,7 @@ def update_screener_table():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get today's date and yesterday's date
             today = datetime.now().date()
-            yesterday = today - timedelta(days=1)
+            yesterday = today - timedelta(days=3)
             
             # Step 1: Clear the screener table
             cur.execute("TRUNCATE TABLE us_screener_table")
