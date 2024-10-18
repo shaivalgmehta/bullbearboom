@@ -15,3 +15,4 @@ requests==2.32.3
 urllib3==2.2.3
 Werkzeug==2.0.1  # Keeping this version for now
 twelvedata[pandas]==1.2.24
+sqlalchemy==2.0.36

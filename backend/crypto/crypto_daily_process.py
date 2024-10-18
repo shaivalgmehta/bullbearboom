@@ -7,7 +7,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data
+from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data, store_stock_daily_data
 from crypto_data_transformer_new import get_transformer
 import json  # Import json for pretty printing
 import time
@@ -24,18 +24,24 @@ db_params = {
     'password': os.getenv('DB_PASSWORD')
 }
 
+
+# Polygon.io API key
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
+
 ######################### FUNCTIONS TO PREPARE THE DATA ############################# 
 
 def process_stock(stock):
     symbol = stock['symbol']
     
     try:
+        # Fetch technical indicators
+        technical_indicator = fetch_technical_indicators_polygon(symbol, db_params, POLYGON_API_KEY, store_stock_daily_data)
         
-        # Fetch all required data
-        technical_indicator = fetch_technical_indicators_polygon(symbol)
-        # print(f"\\nTechnical Indicator data for {symbol}:")
-        # print(json.dumps(technical_indicator, indent=2))
-
+        # If technical_indicator is None, end the process for this symbol
+        if technical_indicator is None:
+            print(f"Skipping {symbol} due to insufficient data or other criteria not met.")
+            return  # This will end the function and move to the next symbol
+        
         # Combine data for daily table
         combined_data = {
             'stock_data': stock,
@@ -44,7 +50,7 @@ def process_stock(stock):
         
         # Transform the data for daily table
         stock_transformed_data = stock_data_transformer.transform(combined_data)[0]
-
+        
         # Store the transformed data
         store_stock_data(stock_transformed_data)
         

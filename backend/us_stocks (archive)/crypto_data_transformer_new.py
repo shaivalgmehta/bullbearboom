@@ -9,40 +9,6 @@ class BaseTransformer(ABC):
     def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         pass
 
-class DailyDataTransformer(BaseTransformer):
-    def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        try:
-            stock_data = data['stock_data']
-            daily_data = data['daily_data']
-            
-            transformed_data = []
-            for day in daily_data:
-                close_price = day['c']
-                volume = day['v']
-                adjusted_volume = volume * close_price
-
-                transformed_day = {
-                    'datetime': day['t'].strftime('%Y-%m-%d'),
-                    'stock': stock_data['symbol'],
-                    'stock_name': stock_data['name'],
-                    'crypto_name': stock_data['crypto_name'],
-                    'ema': None,  # EMA is not calculated for this data
-                    'open': day['o'],
-                    'close': close_price,
-                    'volume': adjusted_volume,  # Volume adjusted by close price
-                    'high': day['h'],
-                    'low': day['l']
-                }
-                transformed_data.append(transformed_day)
-            
-            return transformed_data
-        except KeyError as e:
-            print(f"Error in DailyDataTransformer: Missing key {str(e)}")
-            return []
-        except Exception as e:
-            print(f"Error in DailyDataTransformer: {str(e)}")
-            return []
-
 class CoreDataTransformer(BaseTransformer):
     def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         try:
@@ -57,9 +23,7 @@ class CoreDataTransformer(BaseTransformer):
                 'ema': self._parse_numeric(technical_indicator['ema']),
                 'open': self._parse_numeric(technical_indicator['open']),
                 'close': self._parse_numeric(technical_indicator['close']),
-                'volume': self._parse_numeric(technical_indicator['volume']),
-                'high': self._parse_numeric(technical_indicator['high']),
-                'low': self._parse_numeric(technical_indicator['low'])
+                'volume': self._parse_numeric(technical_indicator['volume'])
             }
             return [transformed_data]
         except KeyError as e:
@@ -248,8 +212,6 @@ class CoreDataTransformerETH(BaseTransformer):
                 'ema': self._parse_numeric(technical_indicator['ema']),
                 'open': self._parse_numeric(technical_indicator['open']),
                 'close': self._parse_numeric(technical_indicator['close']),
-                'high': self._parse_numeric(technical_indicator['high']),
-                'low': self._parse_numeric(technical_indicator['low']),
                 'volume': self._parse_numeric(technical_indicator['volume'])
             }
             return [transformed_data]
@@ -443,8 +405,6 @@ class CoreDataTransformerBTC(BaseTransformer):
                 'ema': self._parse_numeric(technical_indicator['ema']),
                 'open': self._parse_numeric(technical_indicator['open']),
                 'close': self._parse_numeric(technical_indicator['close']),
-                'high': self._parse_numeric(technical_indicator['high']),                
-                'low': self._parse_numeric(technical_indicator['low']),
                 'volume': self._parse_numeric(technical_indicator['volume'])
             }
             return [transformed_data]
@@ -627,8 +587,6 @@ class ForceIndexTransformerBTC(BaseTransformer):
 def get_transformer(source: str, db_params=None) -> BaseTransformer:
     if source.lower() == 'core_data':
         return CoreDataTransformer()
-    elif source.lower() == 'daily_data':
-        return DailyDataTransformer()
     elif source.lower() == 'williams_r':
         return WilliamsRTransformer(db_params)
     elif source.lower() == 'force_index':

@@ -9,6 +9,7 @@ import json
 import time
 import pandas as pd
 from typing import Dict, Any
+import pytz
 
 
 # Load environment variables
@@ -45,28 +46,179 @@ def fetch_stock_list_polygon():
     
     return [{'symbol': ticker['ticker'], 'name': ticker['name'], 'crypto_name': ticker['base_currency_name']} for ticker in all_tickers]
 
-def fetch_technical_indicators_polygon(symbol):
-    end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    start_date = (datetime.now() - timedelta(days=201)).strftime('%Y-%m-%d')
+
+def fetch_daily_data_polygon(symbol, start_date, end_date):
     url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start_date}/{end_date}?apiKey={POLYGON_API_KEY}"
+    
+    all_results = []
+    while url:
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            all_results.extend(data.get('results', []))
+            url = data.get('next_url')
+            if url:
+                url += f"&apiKey={POLYGON_API_KEY}"
+        else:
+            print(f"Error fetching data for {symbol}: {response.status_code}")
+            return None
+    
+    if all_results:
+        df = pd.DataFrame(all_results)
+        df['t'] = pd.to_datetime(df['t'], unit='ms')
+        df = df.sort_values('t')
+        return df[['t', 'o', 'c', 'v', 'h','l']].to_dict('records')
+    return None
+
+
+# def fetch_technical_indicators_polygon(symbol):
+#     end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+#     start_date = (datetime.now() - timedelta(days=201)).strftime('%Y-%m-%d')
+#     url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start_date}/{end_date}?apiKey={POLYGON_API_KEY}"
   
+#     response = requests.get(url)
+#     if response.status_code == 200:
+#         data = response.json()
+#         if data['results']:
+#             df = pd.DataFrame(data['results'])
+#             df['t'] = pd.to_datetime(df['t'], unit='ms')
+#             df = df.sort_values('t')
+#             df['ema'] = df['c'].ewm(span=200, adjust=False).mean()
+#             latest_data = df.iloc[-1]
+#             return {
+#                 'datetime': latest_data['t'].strftime('%Y-%m-%d'),
+#                 'open': latest_data['o'],
+#                 'close': latest_data['c'],
+#                 'ema': latest_data['ema'],
+#                 'volume': latest_data['v'],
+#                 'high': latest_data['h'],
+#                 'low': latest_data['l']
+#             }
+#     return None
+
+
+def fetch_technical_indicators_polygon(symbol: str, db_params: Dict[str, Any], POLYGON_API_KEY: str, store_stock_daily_data) -> Dict[str, Any]:
+    end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    start_date = end_date - timedelta(days=200)  # We need 201 days of data to calculate 200-day EMA
+
+    # Fetch data from TimescaleDB
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT datetime, stock_name, crypto_name, open, close, volume, high, low
+                FROM crypto_daily_table
+                WHERE stock = %s AND datetime BETWEEN %s AND %s
+                ORDER BY datetime
+            """, (symbol, start_date, end_date))
+            db_data = cur.fetchall()
+    finally:
+        conn.close()
+    df = pd.DataFrame(db_data, columns=['datetime', 'stock_name', 'crypto_name', 'open', 'close', 'volume', 'high', 'low'])
+    df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
+    df.set_index('datetime', inplace=True)
+
+    # Convert numeric columns to float, replacing non-numeric values with NaN
+    numeric_columns = ['open', 'close', 'volume', 'high', 'low']
+    for col in numeric_columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Identify missing dates
+    date_range = pd.date_range(start=start_date, end=end_date, freq='D', tz=pytz.UTC)
+    missing_dates = date_range.difference(df.index)
+
+    # Fetch missing data from Polygon if needed
+    if len(missing_dates) > 0:
+        polygon_data = fetch_missing_data_from_polygon(symbol, missing_dates, POLYGON_API_KEY)
+
+        if polygon_data is not None:
+            # Store the newly fetched data
+            stock_name = df['stock_name'].iloc[0] if not df.empty else None
+            crypto_name = df['crypto_name'].iloc[0] if not df.empty else None
+            store_missing_data(polygon_data, symbol, stock_name, crypto_name, store_stock_daily_data)
+
+            # Add the new data to our DataFrame
+            df = pd.concat([df, polygon_data])
+            df.sort_index(inplace=True)
+
+    # Remove any rows with NaN values
+    df = df.dropna()
+
+    # If we still don't have enough data, log an error
+    if len(df) < 200:
+        print(f"Error: Not enough valid data available for {symbol} to calculate EMA. Only {len(df)} days available.")
+        return None
+
+    # Calculate EMA for the latest date
+    latest_date = df.index[-1]
+    try:
+        ema = calculate_ema(df['close'], 200)
+    except Exception as e:
+        print(f"Error calculating EMA for {symbol}: {str(e)}")
+        return None
+    
+    latest_data = df.loc[latest_date]
+    try:
+        return {
+            'datetime': latest_date.strftime('%Y-%m-%d'),
+            'open': float(latest_data['open']),
+            'close': float(latest_data['close']),
+            'ema': float(ema),
+            'volume': float(latest_data['volume']),
+            'high': float(latest_data['high']),
+            'low': float(latest_data['low'])
+        }
+    except Exception as e:
+        print(f"Error converting data to float for {symbol}: {str(e)}")
+        return None
+
+def fetch_missing_data_from_polygon(symbol: str, dates: pd.DatetimeIndex, POLYGON_API_KEY: str) -> pd.DataFrame:
+    start_date = dates.min().strftime('%Y-%m-%d')
+    end_date = dates.max().strftime('%Y-%m-%d')
+    url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start_date}/{end_date}?apiKey={POLYGON_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        if data['results']:
+        
+        if 'results' in data and data['results']:
             df = pd.DataFrame(data['results'])
-            df['t'] = pd.to_datetime(df['t'], unit='ms')
-            df = df.sort_values('t')
-            df['ema'] = df['c'].ewm(span=200, adjust=False).mean()
-            latest_data = df.iloc[-1]
-            return {
-                'datetime': latest_data['t'].strftime('%Y-%m-%d'),
-                'open': latest_data['o'],
-                'close': latest_data['c'],
-                'ema': latest_data['ema'],
-                'volume': latest_data['v']
-            }
-    return None
+            df['datetime'] = pd.to_datetime(df['t'], unit='ms', utc=True)
+            df.set_index('datetime', inplace=True)
+            df = df.rename(columns={'o': 'open', 'c': 'close', 'v': 'volume', 'h': 'high', 'l': 'low'})
+            # Convert to numeric, replacing any non-numeric values with NaN
+            for col in ['open', 'close', 'volume', 'high', 'low']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Adjust volume by multiplying with close price
+            df['volume'] = df['volume'] * df['close']
+            return df[['open', 'close', 'volume', 'high', 'low']]
+        else:
+            print(f"No results found for {symbol} between {start_date} and {end_date}")
+            return None
+    else:
+        print(f"Error fetching data: HTTP {response.status_code}")
+        return None
+
+def store_missing_data(df: pd.DataFrame, symbol: str, stock_name: str, crypto_name: str, store_stock_daily_data):
+    data_to_store = []
+    for date, row in df.iterrows():
+        data_point = {
+            'datetime': date.strftime('%Y-%m-%d'),
+            'stock': symbol,
+            'stock_name': stock_name,
+            'crypto_name': crypto_name,
+            'open': float(row['open']) if pd.notnull(row['open']) else None,
+            'close': float(row['close']) if pd.notnull(row['close']) else None,
+            'volume': float(row['volume']) if pd.notnull(row['volume']) else None,
+            'high': float(row['high']) if pd.notnull(row['high']) else None,
+            'low': float(row['low']) if pd.notnull(row['low']) else None
+        }
+        data_to_store.append(data_point)
+    
+    store_stock_daily_data(data_to_store)
+
+def calculate_ema(series, period):
+    return series.ewm(span=period, adjust=False).mean().iloc[-1]
 
 def fetch_williams_r_polygon(symbol):
     end_date = datetime.now().strftime('%Y-%m-%d')
@@ -183,12 +335,14 @@ def store_stock_data(data):
         data['open'],
         data['close'],
         data['volume'],
+        data['high'],
+        data['low'],
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO crypto_daily_table (
-            datetime, stock, stock_name, crypto_name, ema, open, close, volume, last_modified_date
+            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -197,6 +351,50 @@ def store_stock_data(data):
             open = EXCLUDED.open,
             close = EXCLUDED.close,
             volume = EXCLUDED.volume,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
+            last_modified_date = EXCLUDED.last_modified_date
+    """, values)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def store_stock_daily_data(data_list):
+    conn = psycopg2.connect(**db_params)
+    cur = conn.cursor()
+
+    # Prepare the values list for bulk insert
+    values = [
+        (
+            data['datetime'],
+            data['stock'],
+            data['stock_name'],
+            data['crypto_name'],
+            data['open'],
+            data['close'],
+            data['volume'],
+            data['high'],
+            data['low'],
+            datetime.now(timezone.utc)
+        )
+        for data in data_list
+    ]
+
+    # Perform bulk upsert
+    execute_values(cur, """
+        INSERT INTO crypto_daily_table (
+            datetime, stock, stock_name, crypto_name, open, close, volume, high, low, last_modified_date
+        ) VALUES %s
+        ON CONFLICT (datetime, stock) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            crypto_name = EXCLUDED.crypto_name,
+            open = EXCLUDED.open,
+            close = EXCLUDED.close,
+            volume = EXCLUDED.volume,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 
@@ -293,6 +491,8 @@ def fetch_technical_indicators_polygon_eth(symbol):
             # Convert prices to ETH base
             df['o_eth'] = df['o'] / df['eth_price']
             df['c_eth'] = df['c'] / df['eth_price']
+            df['h_eth'] = df['h'] / df['eth_price']
+            df['l_eth'] = df['l'] / df['eth_price']
             
             # Convert volume to ETH
             df['v_usd'] = df['v'] * df['c']  # Assuming 'v' is in crypto units
@@ -308,6 +508,8 @@ def fetch_technical_indicators_polygon_eth(symbol):
                 'close': latest_data['c_eth'],
                 'ema': latest_data['ema_eth'],
                 'volume': latest_data['v_eth'],
+                'high': latest_data['h_eth'],
+                'low': latest_data['l_eth'],
                 'eth_price': latest_data['eth_price']
             }
     return None
@@ -451,12 +653,14 @@ def store_stock_data_eth(data):
         data['open'],
         data['close'],
         data['volume'],
+        data['high'],
+        data['low'],
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO crypto_daily_table_eth (
-            datetime, stock, stock_name, crypto_name, ema, open, close, volume, last_modified_date
+            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -465,6 +669,8 @@ def store_stock_data_eth(data):
             open = EXCLUDED.open,
             close = EXCLUDED.close,
             volume = EXCLUDED.volume,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 
@@ -561,6 +767,8 @@ def fetch_technical_indicators_polygon_btc(symbol):
             # Convert prices to BTC base
             df['o_btc'] = df['o'] / df['btc_price']
             df['c_btc'] = df['c'] / df['btc_price']
+            df['h_btc'] = df['h'] / df['btc_price']
+            df['l_btc'] = df['l'] / df['btc_price']
             
             # Convert volume to BTC
             df['v_usd'] = df['v'] * df['c']  # Assuming 'v' is in crypto units
@@ -576,6 +784,8 @@ def fetch_technical_indicators_polygon_btc(symbol):
                 'close': latest_data['c_btc'],
                 'ema': latest_data['ema_btc'],
                 'volume': latest_data['v_btc'],
+                'high': latest_data['h_btc'],
+                'low': latest_data['l_btc'],
                 'btc_price': latest_data['btc_price']
             }
     return None
@@ -719,12 +929,14 @@ def store_stock_data_btc(data):
         data['open'],
         data['close'],
         data['volume'],
+        data['high'],
+        data['low'],
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO crypto_daily_table_btc (
-            datetime, stock, stock_name, crypto_name, ema, open, close, volume, last_modified_date
+            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -733,6 +945,8 @@ def store_stock_data_btc(data):
             open = EXCLUDED.open,
             close = EXCLUDED.close,
             volume = EXCLUDED.volume,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 

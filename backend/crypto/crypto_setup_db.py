@@ -56,6 +56,8 @@ def setup_database():
                 open NUMERIC,
                 close NUMERIC,
                 volume NUMERIC,
+                high NUMERIC,
+                low NUMERIC,
                 ema NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_daily_pkey PRIMARY KEY (datetime, stock)
@@ -105,6 +107,8 @@ def setup_database():
                 open NUMERIC,
                 close NUMERIC,
                 volume NUMERIC,
+                high NUMERIC,
+                low NUMERIC,
                 ema NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_daily_eth_pkey PRIMARY KEY (datetime, stock)
@@ -155,6 +159,8 @@ def setup_database():
                 open NUMERIC,
                 close NUMERIC,
                 volume NUMERIC,
+                high NUMERIC,
+                low NUMERIC,
                 ema NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_daily_btc_pkey PRIMARY KEY (datetime, stock)

@@ -41,11 +41,11 @@ def update_screener_table():
                 FROM 
                     crypto_daily_table
                 WHERE 
-                    DATE(datetime) IN (%s, %s)
+                    DATE(datetime) BETWEEN %s AND %s
                     AND LOWER(stock_name) LIKE '%%united states dollar%%'
                 ORDER BY 
                     stock, datetime DESC
-            """, (today, yesterday))
+            """, (yesterday, today))
 
             # Step 3: Update with weekly data only for stocks that have daily data
             cur.execute("""
