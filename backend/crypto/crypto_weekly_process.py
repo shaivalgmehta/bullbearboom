@@ -134,7 +134,7 @@ def main():
     # print(f"{dates_to_process}")
 
     # Uncomment the next line to limit processing to the first few stocks (for testing)
-    stocks = stocks[:2]
+    # stocks = stocks[:2]
 
     # Define base currencies
     bases = ['usd', 'eth', 'btc']
