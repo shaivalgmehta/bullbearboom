@@ -48,6 +48,10 @@ class CoreDataTransformer(BaseTransformer):
         try:
             stock_data = data['stock_data']
             technical_indicator = data['technical_indicator']
+
+            close_price = technical_indicator['close']
+            volume = technical_indicator['volume']
+            adjusted_volume = volume * close_price
    
             transformed_data = {
                 'datetime': technical_indicator['datetime'],
@@ -57,7 +61,7 @@ class CoreDataTransformer(BaseTransformer):
                 'ema': self._parse_numeric(technical_indicator['ema']),
                 'open': self._parse_numeric(technical_indicator['open']),
                 'close': self._parse_numeric(technical_indicator['close']),
-                'volume': self._parse_numeric(technical_indicator['volume']),
+                'volume': adjusted_volume,
                 'high': self._parse_numeric(technical_indicator['high']),
                 'low': self._parse_numeric(technical_indicator['low'])
             }
@@ -167,14 +171,17 @@ class ForceIndexTransformer(BaseTransformer):
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
             df = df.sort_values('datetime')
-
+            
             latest_datetime = df['datetime'].iloc[-1]
-
+            
+            # Current week calculations
             force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
             force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
             
-            last_week_force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-2])
-            last_week_force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-2])
+            # Last week calculations
+            last_week_data = df[df['datetime'] < df['datetime'].iloc[-1]]  # Exclude the latest week
+            last_week_force_index_7_week = float(last_week_data['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
+            last_week_force_index_52_week = float(last_week_data['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
             
             prev_alert_state = self._get_previous_alert_state(symbol)
             force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 

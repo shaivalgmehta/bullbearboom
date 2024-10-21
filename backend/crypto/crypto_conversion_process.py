@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 import pytz
 import os
 from dotenv import load_dotenv
+import pytz
+
+
 
 class CryptoBaseConverter:
     def __init__(self, db_params: Dict[str, Any]):
@@ -31,10 +34,11 @@ class CryptoBaseConverter:
         self.metadata = MetaData()
         self.metadata.reflect(self.engine)
 
-    def create_base_table(self, base_token: str):
-        table_name = f"crypto_daily_table_{base_token.lower()}"
-        create_table_sql = text(f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
+    def create_base_tables(self, base_token: str):
+        # Create daily table
+        daily_table_name = f"crypto_daily_table_{base_token.lower()}"
+        create_daily_table_sql = text(f"""
+            CREATE TABLE IF NOT EXISTS {daily_table_name} (
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
                 stock_name TEXT,
@@ -45,20 +49,48 @@ class CryptoBaseConverter:
                 high NUMERIC,
                 low NUMERIC,
                 ema NUMERIC,
+                ema_metric NUMERIC,
+                ema_rank NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
-                CONSTRAINT {table_name}_pkey PRIMARY KEY (datetime, stock)
+                CONSTRAINT {daily_table_name}_pkey PRIMARY KEY (datetime, stock)
+            )
+        """)
+        
+        # Create weekly table
+        weekly_table_name = f"crypto_weekly_table_{base_token.lower()}"
+        create_weekly_table_sql = text(f"""
+            CREATE TABLE IF NOT EXISTS {weekly_table_name} (
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                williams_r NUMERIC,
+                williams_r_ema NUMERIC,
+                williams_r_rank NUMERIC,
+                williams_r_ema_rank NUMERIC,
+                williams_r_momentum_alert_state TEXT,
+                force_index_7_week NUMERIC,
+                force_index_52_week NUMERIC,
+                force_index_7_week_rank NUMERIC,
+                force_index_52_week_rank NUMERIC,
+                last_week_force_index_7_week NUMERIC,
+                last_week_force_index_52_week NUMERIC,
+                force_index_alert_state TEXT,
+                last_modified_date TIMESTAMPTZ NOT NULL,
+                CONSTRAINT {weekly_table_name}_pkey PRIMARY KEY (datetime, stock)
             )
         """)
         
         with self.engine.connect() as conn:
-            conn.execute(create_table_sql)
-            conn.commit()
-        
-        # Create hypertable
-        create_hypertable_sql = text(f"SELECT create_hypertable('{table_name}', 'datetime', if_not_exists => TRUE)")
-        
-        with self.engine.connect() as conn:
-            conn.execute(create_hypertable_sql)
+            # Create tables
+            conn.execute(create_daily_table_sql)
+            conn.execute(create_weekly_table_sql)
+            
+            # Create hypertables
+            create_daily_hypertable_sql = text(f"SELECT create_hypertable('{daily_table_name}', 'datetime', if_not_exists => TRUE)")
+            create_weekly_hypertable_sql = text(f"SELECT create_hypertable('{weekly_table_name}', 'datetime', if_not_exists => TRUE)")
+            
+            conn.execute(create_daily_hypertable_sql)
+            conn.execute(create_weekly_hypertable_sql)
+            
             conn.commit()
 
     def get_base_token_prices(self, base_token: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
@@ -153,17 +185,48 @@ class CryptoBaseConverter:
         # This is a placeholder. In a real-world scenario, you'd use a task scheduler like Celery or APScheduler
         print(f"Scheduled update for {base_token} every {interval_days} day(s)")
 
-    def add_new_base_token(self, base_token: str, interval_days: int = 1):
-        self.create_base_table(base_token)
-        
-        # # Initial data population
-        # end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        # start_date = datetime(2000, 1, 1, tzinfo=pytz.UTC)
-        # self.update_base_table(base_token, start_date, end_date)
+    def add_new_base_token(self):
+            # Ask user for input
+            base_token = input("Enter the base token you want to create or update a table for (e.g., ETH, BTC): ").upper()
+            
+            # Confirm with the user
+            confirm = input(f"You are about to create a new or update table for {base_token}. Are you sure? (y/n): ").lower()
+            
+            if confirm != 'y':
+                print("Operation cancelled.")
+                return
+            
+            try:
+                # Create the base table
+                print(f"Creating /Updating table for {base_token}...")
+                self.create_base_table(base_token)
+                print(f"Table for {base_token} created / updated successfully.")
+                
+                # Ask user if they want to populate the table with initial data
+                populate = input("Do you want to update the table with initial data? (y/n): ").lower()
+                
+                if populate == 'y':
+                    # Set date range for initial data population
+                    end_date = (datetime.now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                    start_date = datetime(2018, 1, 1, tzinfo=pytz.UTC)  # Adjust this date as needed
+                    
+                    print(f"Updating table for {base_token} with data from {start_date.date()} to {end_date.date()}...")
+                    self.update_base_table(base_token, start_date, end_date)
+                    print(f"Table for {base_token} has been updated with initial data.")
+                else:
+                    print("Table created but not populated with initial data.")
+                
+                print(f"Process completed for {base_token}.")
+            
+            except Exception as e:
+                print(f"An error occurred while processing {base_token}: {str(e)}")
+
 
 # Usage
 
+# Load environment variables
 load_dotenv() 
+
 # Database connection parameters
 db_params = {
     'host': os.getenv('DB_HOST'),
@@ -173,12 +236,40 @@ db_params = {
     'password': os.getenv('DB_PASSWORD')
 }
 
-converter = CryptoBaseConverter(db_params)
+#################### FUNCTION TO CONVERT LAST DAY'S DATA TO OTHER BASES ############################
 
-# Add a new base token (e.g., ETH)
-converter.add_new_base_token('BTC')
+def run_crypto_conversion_process(end_date: datetime):
+    # Initialize CryptoBaseConverter
+    converter = CryptoBaseConverter(db_params)
 
-# Update a specific date range
-start_date = datetime(2020, 1, 1, tzinfo=pytz.UTC)
-end_date = datetime(2024, 10, 17, tzinfo=pytz.UTC)
-converter.update_base_table('BTC', start_date, end_date)
+    # Set date range to yesterday and today
+    end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date
+
+    # Define base currencies
+    bases = ['ETH', 'BTC']
+
+    print("Updating base conversion tables:")
+    for base in bases:
+        print(f"Updating {base} base table...")
+        try:
+            # Uncomment the following line if you need to add a new base token
+            # converter.add_new_base_token(base)
+            
+            converter.update_base_table(base, start_date, end_date)
+            print(f"Successfully updated {base} base table.")
+        except Exception as e:
+            print(f"Error updating {base} base table: {str(e)}")
+
+    print("Finished updating all base conversion tables.")
+
+
+##################### FUNCTION TO ADD NEW BASE TABLE ############################################
+
+def run_add_new_base_token():
+    converter = CryptoBaseConverter(db_params)
+    converter.add_new_base_token()
+
+
+if __name__ == "__main__":
+        run_add_new_base_token()

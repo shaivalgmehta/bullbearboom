@@ -36,12 +36,19 @@ def setup_database():
                 crypto_name TEXT,
                 close NUMERIC,
                 ema NUMERIC,
+                ema_metric NUMERIC,
+                ema_rank NUMERIC,
                 williams_r NUMERIC,
                 williams_r_ema NUMERIC,
                 williams_r_momentum_alert_state TEXT,
                 force_index_7_week NUMERIC,
                 force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,
+                ema_rank NUMERIC,
+                williams_r_rank NUMERIC,
+                williams_r_ema_rank NUMERIC,
+                force_index_7_week_rank NUMERIC,
+                force_index_52_week_rank NUMERIC,
                 CONSTRAINT crypto_screener_pkey PRIMARY KEY (datetime, stock)
 
             """)
@@ -59,6 +66,8 @@ def setup_database():
                 high NUMERIC,
                 low NUMERIC,
                 ema NUMERIC,
+                ema_metric NUMERIC,
+                ema_rank NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_daily_pkey PRIMARY KEY (datetime, stock)
             """)
@@ -70,9 +79,13 @@ def setup_database():
                 stock TEXT NOT NULL,
                 williams_r NUMERIC,
                 williams_r_ema NUMERIC,
+                williams_r_rank NUMERIC,
+                williams_r_ema_rank NUMERIC,
                 williams_r_momentum_alert_state TEXT,
                 force_index_7_week NUMERIC,
                 force_index_52_week NUMERIC,
+                force_index_7_week_rank NUMERIC,
+                force_index_52_week_rank NUMERIC,
                 last_week_force_index_7_week NUMERIC,
                 last_week_force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,

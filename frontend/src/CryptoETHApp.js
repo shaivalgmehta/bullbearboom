@@ -23,15 +23,22 @@ const columnMap = {
   'force_index_7_week': '7-Week Force Index',
   'force_index_52_week': '52-Week Force Index',
   'force_index_alert_state': 'Force Index Alert',
+  'williams_r_rank': 'Williams %R Rank',
+  'williams_r_ema_rank': 'Williams %R EMA Rank',
+  'force_index_7_week_rank': '7-Week Force Index Rank',
+  'force_index_52_week_rank': '52-Week Force Index Rank',
+  'ema_rank': '200-EMA Rank',
   'datetime': 'Time'
 };
 
 const numericalColumns = [
-  'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week'
+  'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'williams_r_rank', 'williams_r_ema_rank',
+  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank'
 ];
 
 const filterColumns = [
-  'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week'
+  'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'williams_r_rank', 'williams_r_ema_rank',
+  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank'
 ];
 
 const alertStateOptions = ['$', '$$$', '-'];
@@ -40,17 +47,17 @@ const drawerWidth = 300;
 
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'ETH', maximumFractionDigits: 6}).format(value);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'ETH', maximumFractionDigits: 6 }).format(value);
 };
 
 const formatRatio = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return Number(value).toFixed(2);
+  return Number(value).toFixed(6);
 };
 
-const formatNumber = (value) => {
+const formatRank = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return Number(value).toFixed(6);
+  return Number(value).toFixed(0);
 };
 
 const formatColumnValue = (column, value) => {
@@ -58,15 +65,19 @@ const formatColumnValue = (column, value) => {
     case 'close':
       return formatCurrency(value);
     case 'ema':
-      return formatNumber(value);
     case 'williams_r':
     case 'williams_r_ema':
-      return formatRatio(value);
     case 'force_index_7_week':
     case 'force_index_52_week':
-      return formatNumber(value);
+      return formatRatio(value);
     case 'datetime':
       return new Date(value).toLocaleString();
+    case 'williams_r_rank':
+    case 'williams_r_ema_rank':
+    case 'force_index_7_week_rank':
+    case 'force_index_52_week_rank':
+    case 'ema_rank':
+      return formatRank(value);
     default:
       return value;
   }
