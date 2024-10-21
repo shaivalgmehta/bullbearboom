@@ -256,7 +256,6 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
             db_data = cur.fetchall()
     finally:
         conn.close()
-    print(f"{db_data}")
 
     df = pd.DataFrame(db_data, columns=['week', 'week_high', 'week_low', 'week_close'])
     df['week'] = pd.to_datetime(df['week'])

@@ -70,7 +70,6 @@ def get_previous_monday(date):
     """Find the Monday of the previous week."""
     previous_monday = date - timedelta(days=date.weekday() + 7)
 
-    print(f'{previous_monday}')
     return previous_monday.replace(hour=0, minute=0, second=0, microsecond=0)
 
 def rank_weekly_metrics(conn, base, end_date):
@@ -139,47 +138,47 @@ def main():
     # Define base currencies
     bases = ['usd', 'eth', 'btc']
 
-    # # Get the appropriate transformers
-    # global williams_r_transformer, force_index_transformer
-    # williams_r_transformer = get_transformer('williams_r', db_params)
-    # force_index_transformer = get_transformer('force_index', db_params)
+    # Get the appropriate transformers
+    global williams_r_transformer, force_index_transformer
+    williams_r_transformer = get_transformer('williams_r', db_params)
+    force_index_transformer = get_transformer('force_index', db_params)
 
-    # # Process data for each week
-    # for end_date in dates_to_process:
-    #     print(f"\n{'='*60}")
-    #     print(f"Processing data for week: {end_date.date()}")
-    #     print(f"{'='*60}")
+    # Process data for each week
+    for end_date in dates_to_process:
+        print(f"\n{'='*60}")
+        print(f"Processing data for week: {end_date.date()}")
+        print(f"{'='*60}")
 
-    #     # Process stocks for each base currency
-    #     for base in bases:
-    #         print(f"\n{'='*40}")
-    #         print(f"Starting processing for base currency: {base.upper()} for week {end_date.date()}")
-    #         print(f"{'='*40}\n")
+        # Process stocks for each base currency
+        for base in bases:
+            print(f"\n{'='*40}")
+            print(f"Starting processing for base currency: {base.upper()} for week {end_date.date()}")
+            print(f"{'='*40}\n")
 
-    #         # Process stocks in batches
-    #         batch_size = 800
-    #         for i in range(0, len(stocks), batch_size):
-    #             batch = stocks[i:i+batch_size]
+            # Process stocks in batches
+            batch_size = 800
+            for i in range(0, len(stocks), batch_size):
+                batch = stocks[i:i+batch_size]
                 
-    #             print(f"Processing batch {i//batch_size + 1} of {len(stocks)//batch_size + 1} for {base.upper()}")
-    #             print("Stocks in this batch:")
-    #             for stock in batch:
-    #                 print(f"- {stock['symbol']}: {stock['name']}")
+                print(f"Processing batch {i//batch_size + 1} of {len(stocks)//batch_size + 1} for {base.upper()}")
+                print("Stocks in this batch:")
+                for stock in batch:
+                    print(f"- {stock['symbol']}: {stock['name']}")
                 
-    #             start_time = time.time()
+                start_time = time.time()
                 
-    #             process_stock_batch(batch, base, end_date)
+                process_stock_batch(batch, base, end_date)
                 
-    #             elapsed_time = time.time() - start_time
-    #             print(f"Batch processing time: {elapsed_time:.2f} seconds")
+                elapsed_time = time.time() - start_time
+                print(f"Batch processing time: {elapsed_time:.2f} seconds")
                 
-    #             print(f"Finished processing batch for {base.upper()}. Moving to next batch.\n")
+                print(f"Finished processing batch for {base.upper()}. Moving to next batch.\n")
 
-    #         print(f"Completed processing all stocks for {base.upper()} for week {end_date.date()}")
+            print(f"Completed processing all stocks for {base.upper()} for week {end_date.date()}")
 
-    #     print(f"\nCompleted processing for week: {end_date.date()}")
+        print(f"\nCompleted processing for week: {end_date.date()}")
 
-    # print("\nAll stocks have been processed for all base currencies")
+    print("\nAll stocks have been processed for all base currencies")
 
     #################### RANK WILLIAM R AND FORCE INDEX ######################################
 
