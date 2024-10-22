@@ -147,7 +147,7 @@ def main():
 
     ################### Run EMA process #####################################################
 
-    Process data for each day
+    #Process data for each day
     current_date = last_end_date
     while current_date <= end_date:
         print(f"\n{'='*60}")
