@@ -261,7 +261,6 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
     df['week'] = pd.to_datetime(df['week'])
     df.set_index('week', inplace=True)
     df.sort_index(inplace=True)
-    print(f"{df}")
 
     # Convert Decimal to float
     for col in ['week_high', 'week_low', 'week_close']:
