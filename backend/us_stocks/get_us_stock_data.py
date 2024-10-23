@@ -75,9 +75,17 @@ def run_stock_data_process(end_date: datetime, batch_size: int = 500):
         print("Stocks in this batch:")
         for stock in batch:
             print(f"- {stock['symbol']}: {stock['name']}")
-                
-        get_stock_data(batch, start_date, end_date, daily_data_transformer)
+ 
+        start_time = time.time()
 
+        get_stock_data(batch, start_date, end_date, daily_data_transformer)
+      
+        # Calculate time spent processing the batch
+        elapsed_time = time.time() - start_time
+        
+        # If processing took less than 60 seconds, wait for the remainder of the minute
+        if elapsed_time < 60:
+            time.sleep(60 - elapsed_time)
         
         print(f"Finished processing batch. Moving to next batch.\n")
 
@@ -130,10 +138,10 @@ def run_stock_data_process_custom_dates():
         for stock in batch:
             print(f"- {stock['symbol']}: {stock['name']}")
                 
-        get_stock_data(batch, start_date_formatted, end_date_formatted, daily_data_transformer)
-  
         start_time = time.time()
-      
+
+        get_stock_data(batch, start_date_formatted, end_date_formatted, daily_data_transformer)
+        
         # Calculate time spent processing the batch
         elapsed_time = time.time() - start_time
         
