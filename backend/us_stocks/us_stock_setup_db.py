@@ -56,6 +56,10 @@ def setup_database():
                 force_index_7_week NUMERIC,
                 force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,
+                pe_ratio_rank INTEGER,
+                ev_ebitda_rank INTEGER,
+                pb_ratio_rank INTEGER,
+                peg_ratio_rank INTEGER,
                 CONSTRAINT us_screener_pkey PRIMARY KEY (datetime, stock)
 
             """)
@@ -69,12 +73,18 @@ def setup_database():
                 open NUMERIC,
                 close NUMERIC,
                 volume NUMERIC,
+                high NUMERIC,
+                low NUMERIC,
                 market_cap NUMERIC,
                 pe_ratio NUMERIC,
                 ev_ebitda NUMERIC,
                 pb_ratio NUMERIC,
                 peg_ratio NUMERIC,
                 ema NUMERIC,
+                pe_ratio_rank INTEGER,
+                ev_ebitda_rank INTEGER,
+                pb_ratio_rank INTEGER,
+                peg_ratio_rank INTEGER,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT us_daily_pkey PRIMARY KEY (datetime, stock)
             """)

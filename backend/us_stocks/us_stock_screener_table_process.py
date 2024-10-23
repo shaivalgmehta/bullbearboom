@@ -24,7 +24,7 @@ def update_screener_table():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get today's date and yesterday's date
             today = datetime.now().date()
-            yesterday = today - timedelta(days=3)
+            yesterday = today - timedelta(days=1)
             
             # Step 1: Clear the screener table
             cur.execute("TRUNCATE TABLE us_screener_table")
@@ -32,17 +32,19 @@ def update_screener_table():
             # Step 2: Insert latest daily data (today or yesterday)
             cur.execute("""
                 INSERT INTO us_screener_table (
-                    datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema
+                    datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema, pe_ratio_rank,
+                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank
                 )
                 SELECT DISTINCT ON (stock)
-                    datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema
+                    datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema, pe_ratio_rank,
+                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank
                 FROM 
                     us_daily_table
                 WHERE 
                     DATE(datetime) BETWEEN %s AND %s
                 ORDER BY 
                     stock, datetime DESC
-            """, (yesterday, today))
+            """, (yesterday, yesterday))
 
             # Step 3: Update with weekly data only for stocks that have daily data
             cur.execute("""
@@ -64,7 +66,7 @@ def update_screener_table():
                     force_index_alert_state = w.force_index_alert_state
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
-            """, (today - timedelta(days=7),))
+            """, (today - timedelta(days=8),))
 
             # Step 4: Update with quarterly data only for stocks that have daily data
             cur.execute("""

@@ -87,8 +87,10 @@ class CoreDataTransformer(BaseTransformer):
 class WilliamsRTransformer(BaseTransformer):
     def __init__(self, db_connection_params):
         self.db_connection_params = db_connection_params
+        self.base = 'usd'  # Default base
 
-    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
+    def transform(self, data: List[Dict[str, Any]], symbol: str, base: str = 'usd') -> Dict[str, Any]:
+        self.base = base.lower()  # Store base for use in _get_previous_alert_state
         try:
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
@@ -132,9 +134,12 @@ class WilliamsRTransformer(BaseTransformer):
         conn = psycopg2.connect(**self.db_connection_params)
         cur = conn.cursor()
         
-        cur.execute("""
+        table_suffix = f"_{self.base}" if self.base != 'usd' else ""
+        table_name = f"crypto_weekly_table{table_suffix}"
+        
+        cur.execute(f"""
             SELECT williams_r_momentum_alert_state 
-            FROM crypto_weekly_table
+            FROM {table_name}
             WHERE stock = %s 
             ORDER BY datetime DESC 
             LIMIT 1
@@ -165,8 +170,10 @@ class WilliamsRTransformer(BaseTransformer):
 class ForceIndexTransformer(BaseTransformer):
     def __init__(self, db_connection_params):
         self.db_connection_params = db_connection_params
+        self.base = 'usd'  # Default base
 
-    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
+    def transform(self, data: List[Dict[str, Any]], symbol: str, base: str = 'usd') -> Dict[str, Any]:
+        self.base = base.lower()  # Store base for use in _get_previous_alert_state
         try:
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
@@ -211,9 +218,12 @@ class ForceIndexTransformer(BaseTransformer):
         conn = psycopg2.connect(**self.db_connection_params)
         cur = conn.cursor()
         
-        cur.execute("""
+        table_suffix = f"_{self.base}" if self.base != 'usd' else ""
+        table_name = f"crypto_weekly_table{table_suffix}"
+        
+        cur.execute(f"""
             SELECT force_index_alert_state 
-            FROM crypto_weekly_table 
+            FROM {table_name}
             WHERE stock = %s 
             ORDER BY datetime DESC 
             LIMIT 1

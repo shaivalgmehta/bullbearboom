@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import requests
 from dotenv import load_dotenv
@@ -9,6 +11,9 @@ from us_stock_get_data_functions import fetch_stock_list_twelve_data, fetch_stoc
 from us_stock_data_transformer_new import get_transformer
 import json  # Import json for pretty printing
 import time
+import pytz
+import pandas as pd
+
 
 # Load environment variables
 load_dotenv()
@@ -22,38 +27,48 @@ db_params = {
     'password': os.getenv('DB_PASSWORD')
 }
 
-######################### FUNCTIONS TO PREPARE THE DATA ############################# 
+def is_empty_or_none(data):
+    return data is None or (isinstance(data, list) and len(data) == 0)
 
-def process_stock(stock):
+def process_stock(stock, end_date):
     symbol = stock['symbol']
-    
     try:
         # Fetch all required data
-        williams_r_data = fetch_williams_r_twelve_data(symbol)
-        force_index_data = fetch_force_index_data(symbol)
+        williams_r_data = fetch_williams_r_twelve_data(symbol, db_params, end_date)
 
-        williams_r_transformed_data = williams_r_transformer.transform(williams_r_data, symbol)
-        force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol)
+        # Process Williams %R data
+        if not is_empty_or_none(williams_r_data):
+            williams_r_transformed_data = williams_r_transformer.transform(williams_r_data, symbol)
+            store_williams_r_data(williams_r_transformed_data, symbol)
+            print(f"Williams %R data for {symbol} has been processed and stored")
+        else:
+            print(f"Skipping Williams %R for {symbol} due to insufficient data or other criteria not met")
 
+        force_index_data = fetch_force_index_data(symbol, db_params, end_date)
+        # Process Force Index data
+        if not is_empty_or_none(force_index_data):
+            force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol)
+            store_force_index_data(force_index_transformed_data, symbol)
+            print(f"Force Index data for {symbol} has been processed and stored")
+        else:
+            print(f"Skipping Force Index for {symbol} due to insufficient data or other criteria not met")
 
-        # Store the transformed data
-        store_force_index_data(force_index_transformed_data, symbol)
-        store_williams_r_data(williams_r_transformed_data, symbol)
-        
-        print(f"Data for {symbol} has been stored in TimescaleDB")
+        if is_empty_or_none(williams_r_data) and is_empty_or_none(force_index_data):
+            print(f"No data processed for {symbol} due to insufficient data or other criteria not met")
+        else:
+            print(f"Data for {symbol} has been stored in TimescaleDB")
+
     except Exception as e:
         print(f"Error processing {symbol}: {str(e)}")
 
-######################### DEFINE MAIN PROCESS TO EXECUTE ############################# 
-
-def process_stock_batch(batch):
+def process_stock_batch(batch, end_date):
     for stock in batch:
-        process_stock(stock)
+        process_stock(stock, end_date)
 
 def main():
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data()
-    
+    end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     # # Limit to first 3 stocks
     # stocks = stocks[:1]
 
@@ -74,7 +89,7 @@ def main():
         
         start_time = time.time()
         
-        process_stock_batch(batch)
+        process_stock_batch(batch, end_date)
         
         # Calculate time spent processing the batch
         elapsed_time = time.time() - start_time

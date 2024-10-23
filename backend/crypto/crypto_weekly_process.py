@@ -38,7 +38,7 @@ def process_stock(stock, base, end_date):
 
         # Process Williams %R data
         if not is_empty_or_none(williams_r_data):
-            williams_r_transformed_data = williams_r_transformer.transform(williams_r_data, symbol)
+            williams_r_transformed_data = williams_r_transformer.transform(williams_r_data, symbol, base)
             store_williams_r_data(williams_r_transformed_data, symbol, base)
             print(f"Williams %R data for {symbol}/{base} has been processed and stored")
         else:
@@ -47,7 +47,7 @@ def process_stock(stock, base, end_date):
         force_index_data = fetch_force_index_data(symbol, db_params, end_date, base)
         # Process Force Index data
         if not is_empty_or_none(force_index_data):
-            force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol)
+            force_index_transformed_data = force_index_transformer.transform(force_index_data, symbol, base)
             store_force_index_data(force_index_transformed_data, symbol, base)
             print(f"Force Index data for {symbol}/{base} has been processed and stored")
         else:
@@ -133,7 +133,7 @@ def main():
     # print(f"{dates_to_process}")
 
     # Uncomment the next line to limit processing to the first few stocks (for testing)
-    # stocks = stocks[:2]
+    # stocks = stocks[:3]
 
     # Define base currencies
     bases = ['usd', 'eth', 'btc']
