@@ -68,7 +68,15 @@ def process_stock_batch(batch, end_date):
 def main():
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data()
-    end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Calculate the date range for the last X weeks
+    current = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Calculate days since Sunday (weekday() returns 0 for Monday, 6 for Sunday)
+    days_since_sunday = (current.weekday() + 1) % 7
+
+    # Subtract those days to get to the most recent Sunday
+    end_date = current - timedelta(days=days_since_sunday)
+    dates_to_process = [end_date - timedelta(weeks=i) for i in range(1)]
     # # Limit to first 3 stocks
     # stocks = stocks[:1]
 
@@ -77,30 +85,35 @@ def main():
     williams_r_transformer = get_transformer('williams_r', db_params)
     force_index_transformer = get_transformer('force_index', db_params)
 
-    # Process stocks in batches of 10
-    batch_size = 800
-    for i in range(0, len(stocks), batch_size):
-        batch = stocks[i:i+batch_size]
-        
-        print(f"Processing batch {i//batch_size + 1} of {len(stocks)//batch_size + 1}")
-        print("Stocks in this batch:")
-        for stock in batch:
-            print(f"- {stock['symbol']}: {stock['name']}")
-        
-        start_time = time.time()
-        
-        process_stock_batch(batch, end_date)
-        
-        # Calculate time spent processing the batch
-        elapsed_time = time.time() - start_time
-        
-        # If processing took less than 60 seconds, wait for the remainder of the minute
-        if elapsed_time < 60:
-            time.sleep(60 - elapsed_time)
-        
-        print(f"Finished processing batch. Moving to next batch.\n")
+    for end_date in dates_to_process:
+        print(f"\n{'='*40}")
+        print(f"Starting processing for week {end_date.date()}")
+        print(f"{'='*40}\n")
 
-    print("All stocks have been processed.")
+        # Process stocks in batches of 10
+        batch_size = 600
+        for i in range(0, len(stocks), batch_size):
+            batch = stocks[i:i+batch_size]
+            
+            print(f"Processing batch {i//batch_size + 1} of {len(stocks)//batch_size + 1}")
+            print("Stocks in this batch:")
+            for stock in batch:
+                print(f"- {stock['symbol']}: {stock['name']}")
+            
+            start_time = time.time()
+            
+            process_stock_batch(batch, end_date)
+            
+            # Calculate time spent processing the batch
+            elapsed_time = time.time() - start_time
+            
+            # If processing took less than 60 seconds, wait for the remainder of the minute
+            if elapsed_time < 60:
+                time.sleep(60 - elapsed_time)
+            
+            print(f"Finished processing batch. Moving to next batch.\n")
+
+        print("All stocks have been processed.")
 
 if __name__ == "__main__":
     main()

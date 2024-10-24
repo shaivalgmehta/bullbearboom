@@ -174,41 +174,6 @@ def store_missing_data(df: pd.DataFrame, symbol: str, stock_name: str, store_sto
 
     store_stock_daily_data(data_to_store)
 
-# def fetch_technical_indicators_twelve_data(symbol):
-#     technical_indicator = td.time_series(
-#         symbol=symbol,
-#         interval="1day",
-#         country="United States",
-#         type="Common Stock",
-#         outputsize=200
-#     ).with_ema(
-#         time_period=200
-#     ).as_json()
-#     return technical_indicator
-
-# def fetch_williams_r_twelve_data(symbol):
-#     williams_r = td.time_series(
-#         symbol=symbol,
-#         interval="1week",
-#         country="United States",
-#         type="Common Stock",
-#         outputsize =21
-#     ).with_willr(
-#         time_period=52
-#     ).without_ohlc().as_json()
-#     return williams_r
-
-# def fetch_force_index_data(symbol):
-#     # Fetch 54 weeks of data to calculate both current and last week's averages
-#     time_series = td.time_series(
-#         symbol=symbol,
-#         interval="1week",
-#         country="United States",
-#         type="Common Stock",
-#         outputsize=55
-#     ).as_json()
-    
-#     return time_series
 
 def fetch_williams_r_twelve_data(symbol: str, db_params: Dict[str, Any], end_date: datetime) -> List[Dict[str, Any]]:
     end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)

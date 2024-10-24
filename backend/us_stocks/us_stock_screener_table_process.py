@@ -66,7 +66,7 @@ def update_screener_table():
                     force_index_alert_state = w.force_index_alert_state
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
-            """, (today - timedelta(days=8),))
+            """, (today - timedelta(days=13),))
 
             # Step 4: Update with quarterly data only for stocks that have daily data
             cur.execute("""
@@ -98,14 +98,14 @@ def update_screener_table():
                     current_quarter_sales = lq.current_quarter_sales,
                     sales_change_percent = CASE 
                         WHEN lq.last_quarter_sales != 0 
-                        THEN ((lq.current_quarter_sales - lq.last_quarter_sales) / lq.last_quarter_sales) * 100 
+                        THEN ((lq.current_quarter_sales - lq.last_quarter_sales) / lq.last_quarter_sales) 
                         ELSE NULL 
                     END,
                     last_quarter_ebitda = lq.last_quarter_ebitda,
                     current_quarter_ebitda = lq.current_quarter_ebitda,
                     ebitda_change_percent = CASE 
                         WHEN lq.last_quarter_ebitda != 0 
-                        THEN ((lq.current_quarter_ebitda - lq.last_quarter_ebitda) / lq.last_quarter_ebitda) * 100 
+                        THEN ((lq.current_quarter_ebitda - lq.last_quarter_ebitda) / lq.last_quarter_ebitda) 
                         ELSE NULL 
                     END,
                     roce = lq.roce,
@@ -113,7 +113,7 @@ def update_screener_table():
                     discounted_cash_flow = lq.discounted_cash_flow
                 FROM latest_quarters lq
                 WHERE s.stock = lq.stock
-            """, (today - timedelta(days=120),))
+            """, (today - timedelta(days=200),))
 
             conn.commit()
 
