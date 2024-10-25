@@ -128,7 +128,14 @@ def main():
     stocks = fetch_stock_list_polygon()
 
     # Calculate the date range for the last X weeks
-    end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    current = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Calculate days since Sunday (weekday() returns 0 for Monday, 6 for Sunday)
+    days_since_sunday = (current.weekday() + 1) % 7
+
+    # Subtract those days to get to the most recent Sunday
+    end_date = current - timedelta(days=days_since_sunday)
+
     dates_to_process = [end_date - timedelta(weeks=i) for i in range(1)]
     # print(f"{dates_to_process}")
 

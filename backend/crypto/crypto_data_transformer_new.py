@@ -178,23 +178,34 @@ class ForceIndexTransformer(BaseTransformer):
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
             df = df.sort_values('datetime')
-            
+
             latest_datetime = df['datetime'].iloc[-1]
-            
+
             # Current week calculations
-            force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
-            force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
-            
+            # For 7-week calculation, use last 8 points (current + 7 previous)
+            df_7week = df.tail(8)
+            force_index_7_week = float(df_7week['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
+
+            # For 52-week calculation, use last 53 points (current + 52 previous)
+            df_52week = df.tail(53)
+            force_index_52_week = float(df_52week['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
+
             # Last week calculations
             last_week_data = df[df['datetime'] < df['datetime'].iloc[-1]]  # Exclude the latest week
-            last_week_force_index_7_week = float(last_week_data['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
-            last_week_force_index_52_week = float(last_week_data['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
-            
+
+            # For 7-week calculation of last week, use last 8 points
+            last_week_data_7week = last_week_data.tail(8)
+            last_week_force_index_7_week = float(last_week_data_7week['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
+
+            # For 52-week calculation of last week, use last 53 points
+            last_week_data_52week = last_week_data.tail(53)
+            last_week_force_index_52_week = float(last_week_data_52week['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
+
+
             prev_alert_state = self._get_previous_alert_state(symbol)
             force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 
                                                       last_week_force_index_7_week, last_week_force_index_52_week, 
                                                       prev_alert_state)
-            
             return {
                 'datetime': latest_datetime,
                 'force_index_7_week': force_index_7_week,
