@@ -73,7 +73,7 @@ def update_screener_table():
                     force_index_52_week_rank = w.force_index_52_week_rank                 
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
-            """, (today - timedelta(days=13),))
+            """, (today - timedelta(days=14),))
 
             conn.commit()
 
