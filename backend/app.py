@@ -9,6 +9,9 @@ from decimal import Decimal
 from datetime import datetime
 import logging
 from us_stocks.us_stock_screener_table_process import update_screener_table
+from crypto.crypto_screener_table_process import update_screener_table_usd
+from crypto.crypto_screener_table_process_btc import update_screener_table_btc
+from crypto.crypto_screener_table_process_eth import update_screener_table_eth
 
 
 # Load environment variables
@@ -89,88 +92,111 @@ def get_latest_stock_data():
 
 @app.route('/api/crypto/latest')
 def get_latest_crypto_data():
-    logging.info("Fetching latest data for all cryptocurrencies")
+    logging.info("Fetching latest data for all stocks")
     try:
+        # Get date parameter, default to yesterday if not provided
+        date_str = request.args.get('date')
+        if date_str:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            selected_date = datetime.now().date() - timedelta(days=1)
+        # print(f{selected_date})
+        # Update screener table for the selected date
+        update_screener_table_usd(selected_date)
+        
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         query = """
-            SELECT DISTINCT ON (stock) *
+            SELECT *
             FROM crypto_screener_table
-            ORDER BY stock, datetime DESC
+            WHERE DATE(datetime) = %s
+            ORDER BY stock
         """
         
-        cur.execute(query)
+        cur.execute(query, (selected_date,))
         data = cur.fetchall()
         
-        logging.info(f"Fetched latest data for {len(data)} cryptocurrencies")
+        logging.info(f"Fetched data for {len(data)} crypto for date {selected_date}")
         cur.close()
         conn.close()
         
         return jsonify(data)
     except Exception as e:
-        logging.error(f"Error fetching latest crypto data: {e}")
+        logging.error(f"Error fetching crypto data: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/crypto/latest_eth')
 def get_latest_crypto_eth_data():
-    logging.info("Fetching latest data for all cryptocurrencies")
+    logging.info("Fetching latest data for all stocks")
     try:
+        # Get date parameter, default to yesterday if not provided
+        date_str = request.args.get('date')
+        if date_str:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            selected_date = datetime.now().date() - timedelta(days=1)
+        # print(f{selected_date})
+        # Update screener table for the selected date
+        update_screener_table_usd(selected_date)
+        
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         query = """
-            SELECT DISTINCT ON (stock) *
+            SELECT *
             FROM crypto_screener_table_eth
-            ORDER BY stock, datetime DESC
+            WHERE DATE(datetime) = %s
+            ORDER BY stock
         """
         
-        cur.execute(query)
+        cur.execute(query, (selected_date,))
         data = cur.fetchall()
         
-        logging.info(f"Fetched latest data for {len(data)} cryptocurrencies")
+        logging.info(f"Fetched data for {len(data)} crypto for date {selected_date}")
         cur.close()
         conn.close()
         
         return jsonify(data)
     except Exception as e:
-        logging.error(f"Error fetching latest crypto data: {e}")
+        logging.error(f"Error fetching crypto data: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/crypto/latest_btc')
 def get_latest_crypto_btc_data():
-    logging.info("Fetching latest data for all cryptocurrencies")
+    logging.info("Fetching latest data for all stocks")
     try:
+        # Get date parameter, default to yesterday if not provided
+        date_str = request.args.get('date')
+        if date_str:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            selected_date = datetime.now().date() - timedelta(days=1)
+        # print(f{selected_date})
+        # Update screener table for the selected date
+        update_screener_table_usd(selected_date)
+        
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         query = """
-            SELECT DISTINCT ON (stock) *
+            SELECT *
             FROM crypto_screener_table_btc
-            ORDER BY stock, datetime DESC
+            WHERE DATE(datetime) = %s
+            ORDER BY stock
         """
         
-        cur.execute(query)
+        cur.execute(query, (selected_date,))
         data = cur.fetchall()
         
-        logging.info(f"Fetched latest data for {len(data)} cryptocurrencies")
+        logging.info(f"Fetched data for {len(data)} crypto for date {selected_date}")
         cur.close()
         conn.close()
         
         return jsonify(data)
     except Exception as e:
-        logging.error(f"Error fetching latest crypto data: {e}")
+        logging.error(f"Error fetching crypto data: {e}")
         return jsonify({"error": str(e)}), 500
-
-@app.errorhandler(500)
-def internal_error(error):
-    logging.error(f"Internal error: {error}")
-    return jsonify({"error": "Internal server error"}), 500
-
-@app.errorhandler(404)
-def not_found_error(error):
-    logging.error(f"Not found error: {error}")
-    return jsonify({"error": "Resource not found"}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

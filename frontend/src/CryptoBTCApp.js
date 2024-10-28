@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { CircularProgress, LinearProgress } from '@mui/material';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format } from 'date-fns';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
@@ -87,6 +92,8 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
   const [cryptoData, setCryptoData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
   const [alertStateFilters, setAlertStateFilters] = useState({
     williams_r_momentum_alert_state: [],
     force_index_alert_state: []
@@ -99,16 +106,20 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const result = await axios.get(`${API_URL}/crypto/latest_btc`);
+        setIsLoading(true);  // Start loading
+        const formattedDate = selectedDate.toISOString().split('T')[0];
+        const result = await axios.get(`${API_URL}/crypto/latest_btc?date=${formattedDate}`);
         setCryptoData(result.data);
         setFilteredData(result.data);
       } catch (error) {
         console.error("Error fetching crypto data:", error);
+      } finally {
+        setIsLoading(false);  // End loading regardless of success/failure
       }
     };
 
     fetchData();
-  }, []);
+  }, [selectedDate]);
 
   const handleFilterChange = (column, value, type) => {
     setFilters(prevFilters => ({
@@ -188,10 +199,26 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
 
   const drawer = (
     <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 2 }}>
-        <Button onClick={toggleDrawer}>
-          <ChevronLeftIcon />
-        </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2, mt: 8 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Filters</Typography>
+          <Button onClick={toggleDrawer}>
+            <ChevronLeftIcon />
+          </Button>
+        </Box>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <DatePicker
+            label="Select Date"
+            value={selectedDate}
+            onChange={(newDate) => {
+              if (newDate) {
+                setSelectedDate(newDate);
+              }
+            }}
+            maxDate={new Date(new Date().setDate(new Date().getDate() - 1))}
+            slotProps={{ textField: { size: "small", fullWidth: true } }}
+          />
+        </LocalizationProvider>
       </Box>
       <Divider />
       <List>
@@ -277,11 +304,11 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
 
   return (
     <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: 'calc(100vh - 64px)', // Subtracting the AppBar height
-        overflow: 'hidden', // Prevent scrolling on this container
-      }}>
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: 'calc(100vh - 64px)', // Subtracting the AppBar height
+      overflow: 'hidden', // Prevent scrolling on this container
+    }}>
       <Drawer
         variant={isMobile ? "temporary" : "persistent"}
         open={drawerOpen}
@@ -317,23 +344,34 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
         }}
       >
         <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto' }}>
+          {isLoading ? (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              height: '100%',
+              p: 4
+            }}>
+              <CircularProgress />
+            </Box>
+          ) : (
           <Table stickyHeader>
             <TableHead>
               <TableRow>
                 {visibleColumns.map((key) => (
                   <TableCell 
                     key={key} 
-                    align={key === 'stock' || key === 'crypto_name' ? "left" : "center"}
+                    align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
                     sx={{ 
                       whiteSpace: 'nowrap', 
                       padding: '8px 12px',
                       fontSize: '0.9rem',
                       fontWeight: 'bold',
                       backgroundColor: '#f8f9fa',
-                      ...(key === 'crypto_name' && { width: '200px' })
+                      ...(key === 'stock_name' && { width: '200px' })
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'crypto_name' ? "flex-start" : "center" }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" }}>
                       {columnMap[key]}
                       {numericalColumns.includes(key) && (
                         <Button size="small" onClick={() => requestSort(key)}>
@@ -354,12 +392,12 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedData.map((crypto, index) => (
+              {sortedData.map((stock, index) => (
                 <TableRow key={index} hover>
                   {visibleColumns.map((column, colIndex) => (
                     <TableCell 
                       key={colIndex} 
-                      align={column === 'stock' || column === 'crypto_name' ? "left" : "center"}
+                      align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
                       sx={{ 
                         whiteSpace: 'nowrap', 
                         padding: '8px 12px',
@@ -371,12 +409,12 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
                         })
                       }}
                     >
-                      {column === 'crypto_name' ? (
-                        <Tooltip title={crypto[column]} placement="top">
-                          <span>{formatColumnValue(column, crypto[column])}</span>
+                      {column === 'stock_name' ? (
+                        <Tooltip title={stock[column]} placement="top">
+                          <span>{formatColumnValue(column, stock[column])}</span>
                         </Tooltip>
                       ) : (
-                        formatColumnValue(column, crypto[column])
+                        formatColumnValue(column, stock[column])
                       )}
                     </TableCell>
                   ))}
@@ -384,6 +422,7 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
               ))}
             </TableBody>
           </Table>
+          )}
         </TableContainer>
       </Box>
     </Box>

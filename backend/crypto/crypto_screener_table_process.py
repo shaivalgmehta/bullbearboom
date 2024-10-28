@@ -21,12 +21,13 @@ DB_CONFIG = {
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-def update_screener_table():
+def update_screener_table_usd(selected_date=None):
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get today's date and yesterday's date
-            today = datetime.now().date()
-            yesterday = today - timedelta(days=1)
+            target_date = selected_date if selected_date else datetime.now().date()
+            # today = datetime.now().date()
+            yesterday = target_date - timedelta(days=1)
             
             # Step 1: Clear the screener table
             cur.execute("TRUNCATE TABLE crypto_screener_table")
@@ -45,7 +46,7 @@ def update_screener_table():
                     AND LOWER(stock_name) LIKE '%%united states dollar%%'
                 ORDER BY 
                     stock, datetime DESC
-            """, (yesterday, today))
+            """, (yesterday, target_date))
 
             # Step 3: Update with weekly data only for stocks that have daily data
             cur.execute("""
@@ -73,7 +74,7 @@ def update_screener_table():
                     force_index_52_week_rank = w.force_index_52_week_rank
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
-            """, (today - timedelta(days=14),))
+            """, (target_date - timedelta(days=14),))
 
             conn.commit()
 

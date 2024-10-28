@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { CircularProgress, LinearProgress } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import axios from 'axios';
@@ -122,7 +123,8 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   const [stockData, setStockData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({});
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
   const [alertStateFilters, setAlertStateFilters] = useState({
     williams_r_momentum_alert_state: [],
     force_index_alert_state: []
@@ -135,12 +137,15 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const formattedDate = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        setIsLoading(true);  // Start loading
+        const formattedDate = selectedDate.toISOString().split('T')[0];
         const result = await axios.get(`${API_URL}/stocks/latest?date=${formattedDate}`);
         setStockData(result.data);
         setFilteredData(result.data);
       } catch (error) {
         console.error("Error fetching stock data:", error);
+      } finally {
+        setIsLoading(false);  // End loading regardless of success/failure
       }
     };
 
@@ -225,7 +230,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
 
   const drawer = (
     <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2, mt: 8 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">Filters</Typography>
           <Button onClick={toggleDrawer}>
@@ -241,7 +246,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                 setSelectedDate(newDate);
               }
             }}
-            maxDate={new Date()}
+            maxDate={new Date(new Date().setDate(new Date().getDate() - 1))}
             slotProps={{ textField: { size: "small", fullWidth: true } }}
           />
         </LocalizationProvider>
@@ -370,6 +375,17 @@ function StockApp({ drawerOpen, toggleDrawer }) {
         }}
       >
         <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto' }}>
+          {isLoading ? (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              height: '100%',
+              p: 4
+            }}>
+              <CircularProgress />
+            </Box>
+          ) : (
           <Table stickyHeader>
             <TableHead>
               <TableRow>
@@ -437,6 +453,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
               ))}
             </TableBody>
           </Table>
+          )}
         </TableContainer>
       </Box>
     </Box>
