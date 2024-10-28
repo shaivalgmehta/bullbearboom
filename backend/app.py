@@ -8,6 +8,8 @@ import json
 from decimal import Decimal
 from datetime import datetime
 import logging
+from us_stocks.us_stock_screener_table_process import update_screener_table
+
 
 # Load environment variables
 load_dotenv()
@@ -53,25 +55,36 @@ def get_db_connection():
 def get_latest_stock_data():
     logging.info("Fetching latest data for all stocks")
     try:
+        # Get date parameter, default to yesterday if not provided
+        date_str = request.args.get('date')
+        if date_str:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            selected_date = datetime.now().date() - timedelta(days=1)
+        # print(f{selected_date})
+        # Update screener table for the selected date
+        update_screener_table(selected_date)
+        
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         query = """
-            SELECT DISTINCT ON (stock) *
+            SELECT *
             FROM us_screener_table
-            ORDER BY stock, datetime DESC
+            WHERE DATE(datetime) = %s
+            ORDER BY stock
         """
         
-        cur.execute(query)
+        cur.execute(query, (selected_date,))
         data = cur.fetchall()
         
-        logging.info(f"Fetched latest data for {len(data)} stocks")
+        logging.info(f"Fetched data for {len(data)} stocks for date {selected_date}")
         cur.close()
         conn.close()
         
         return jsonify(data)
     except Exception as e:
-        logging.error(f"Error fetching latest stock data: {e}")
+        logging.error(f"Error fetching stock data: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/crypto/latest')

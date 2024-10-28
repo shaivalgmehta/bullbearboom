@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format } from 'date-fns';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
@@ -118,6 +122,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   const [stockData, setStockData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({});
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [alertStateFilters, setAlertStateFilters] = useState({
     williams_r_momentum_alert_state: [],
     force_index_alert_state: []
@@ -130,7 +135,8 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const result = await axios.get(`${API_URL}/stocks/latest`);
+        const formattedDate = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        const result = await axios.get(`${API_URL}/stocks/latest?date=${formattedDate}`);
         setStockData(result.data);
         setFilteredData(result.data);
       } catch (error) {
@@ -139,7 +145,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     };
 
     fetchData();
-  }, []);
+  }, [selectedDate]);
 
   const handleFilterChange = (column, value, type) => {
     setFilters(prevFilters => ({
@@ -219,10 +225,26 @@ function StockApp({ drawerOpen, toggleDrawer }) {
 
   const drawer = (
     <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 2 }}>
-        <Button onClick={toggleDrawer}>
-          <ChevronLeftIcon />
-        </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Filters</Typography>
+          <Button onClick={toggleDrawer}>
+            <ChevronLeftIcon />
+          </Button>
+        </Box>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <DatePicker
+            label="Select Date"
+            value={selectedDate}
+            onChange={(newDate) => {
+              if (newDate) {
+                setSelectedDate(newDate);
+              }
+            }}
+            maxDate={new Date()}
+            slotProps={{ textField: { size: "small", fullWidth: true } }}
+          />
+        </LocalizationProvider>
       </Box>
       <Divider />
       <List>

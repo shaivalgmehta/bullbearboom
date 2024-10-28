@@ -19,12 +19,14 @@ DB_CONFIG = {
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-def update_screener_table():
+def update_screener_table(selected_date=None):
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get today's date and yesterday's date
-            today = datetime.now().date()
-            yesterday = today - timedelta(days=1)
+            target_date = selected_date if selected_date else datetime.now().date() - timedelta(days=1)
+
+            # today = datetime.now().date()
+            # yesterday = today - timedelta(days=1)
             
             # Step 1: Clear the screener table
             cur.execute("TRUNCATE TABLE us_screener_table")
@@ -44,7 +46,7 @@ def update_screener_table():
                     DATE(datetime) BETWEEN %s AND %s
                 ORDER BY 
                     stock, datetime DESC
-            """, (yesterday, yesterday))
+            """, (target_date, target_date))
 
             # Step 3: Update with weekly data only for stocks that have daily data
             cur.execute("""
@@ -66,7 +68,7 @@ def update_screener_table():
                     force_index_alert_state = w.force_index_alert_state
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
-            """, (today - timedelta(days=13),))
+            """, (target_date - timedelta(days=13),))
 
             # Step 4: Update with quarterly data only for stocks that have daily data
             cur.execute("""
@@ -113,7 +115,7 @@ def update_screener_table():
                     discounted_cash_flow = lq.discounted_cash_flow
                 FROM latest_quarters lq
                 WHERE s.stock = lq.stock
-            """, (today - timedelta(days=200),))
+            """, (target_date - timedelta(days=200),))
 
             conn.commit()
 
