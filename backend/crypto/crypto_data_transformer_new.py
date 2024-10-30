@@ -111,7 +111,7 @@ class WilliamsRTransformer(BaseTransformer):
             latest_datetime = df_last_21['datetime'].iloc[-1]
             latest_ema = float(df_last_21['willr_ema'].iloc[-1])
 
-            prev_alert_state = self._get_previous_alert_state(symbol)
+            prev_alert_state = self._get_previous_alert_state(symbol, latest_datetime)
             
             williams_r_momentum_alert_state = self._determine_alert_state(latest_williams_r, latest_ema, prev_alert_state)
             
@@ -130,7 +130,7 @@ class WilliamsRTransformer(BaseTransformer):
                 'williams_r_momentum_alert_state': None
             }
             
-    def _get_previous_alert_state(self, symbol):
+    def _get_previous_alert_state(self, symbol, latest_datetime):
         conn = psycopg2.connect(**self.db_connection_params)
         cur = conn.cursor()
         
@@ -140,10 +140,10 @@ class WilliamsRTransformer(BaseTransformer):
         cur.execute(f"""
             SELECT williams_r_momentum_alert_state 
             FROM {table_name}
-            WHERE stock = %s 
+            WHERE datetime < %s AND stock = %s 
             ORDER BY datetime DESC 
             LIMIT 1
-        """, (symbol,))
+        """, (latest_datetime, symbol))
         
         result = cur.fetchone()
         
@@ -202,7 +202,7 @@ class ForceIndexTransformer(BaseTransformer):
             last_week_force_index_52_week = float(last_week_data_52week['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
 
 
-            prev_alert_state = self._get_previous_alert_state(symbol)
+            prev_alert_state = self._get_previous_alert_state(symbol, latest_datetime)
             force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 
                                                       last_week_force_index_7_week, last_week_force_index_52_week, 
                                                       prev_alert_state)
@@ -225,7 +225,7 @@ class ForceIndexTransformer(BaseTransformer):
                 'force_index_alert_state': None
             }
 
-    def _get_previous_alert_state(self, symbol):
+    def _get_previous_alert_state(self, symbol, latest_datetime):
         conn = psycopg2.connect(**self.db_connection_params)
         cur = conn.cursor()
         
@@ -235,10 +235,10 @@ class ForceIndexTransformer(BaseTransformer):
         cur.execute(f"""
             SELECT force_index_alert_state 
             FROM {table_name}
-            WHERE stock = %s 
+            WHERE datetime < %s AND stock = %s 
             ORDER BY datetime DESC 
             LIMIT 1
-        """, (symbol,))
+        """, (latest_datetime, symbol))
         
         result = cur.fetchone()
         
