@@ -75,8 +75,11 @@ def main():
     days_since_sunday = (current.weekday() + 1) % 7
 
     # Subtract those days to get to the most recent Sunday
-    end_date = current - timedelta(days=days_since_sunday)
-    dates_to_process = [end_date - timedelta(weeks=i) for i in range(1)]
+    # end_date = current - timedelta(days=days_since_sunday)
+    end_date = current - timedelta(days=1)
+    dates_to_process = [end_date - timedelta(days=i) for i in range(5)]
+    dates_to_process.reverse()
+    # print(f'{dates_to_process}')
     # # Limit to first 3 stocks
     # stocks = stocks[:1]
 
@@ -91,7 +94,7 @@ def main():
         print(f"{'='*40}\n")
 
         # Process stocks in batches of 10
-        batch_size = 600
+        batch_size = 5000
         for i in range(0, len(stocks), batch_size):
             batch = stocks[i:i+batch_size]
             
@@ -106,10 +109,10 @@ def main():
             
             # Calculate time spent processing the batch
             elapsed_time = time.time() - start_time
-            
-            # If processing took less than 60 seconds, wait for the remainder of the minute
-            if elapsed_time < 60:
-                time.sleep(60 - elapsed_time)
+            print(f"{elapsed_time}")
+            # # If processing took less than 60 seconds, wait for the remainder of the minute
+            # if elapsed_time < 60:
+            #     time.sleep(60 - elapsed_time)
             
             print(f"Finished processing batch. Moving to next batch.\n")
 

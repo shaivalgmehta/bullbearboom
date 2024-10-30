@@ -220,42 +220,107 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
     end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     start_date = end_date - timedelta(weeks=80)
 
-    table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+    daily_table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+    weekly_table_name = f"crypto_weekly_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
 
     # Fetch data from TimescaleDB
     conn = psycopg2.connect(**db_params)
+    # try:
+    #     with conn.cursor() as cur:
+    #         cur.execute(f"""
+    #             WITH weekly_data AS (
+    #                 SELECT 
+    #                     date_trunc('week', datetime) as week,
+    #                     stock,
+    #                     high,
+    #                     low,
+    #                     close,
+    #                     ROW_NUMBER() OVER (PARTITION BY date_trunc('week', datetime), stock ORDER BY datetime DESC) as rn
+    #                 FROM 
+    #                     {daily_table_name}
+    #                 WHERE 
+    #                     stock = %s 
+    #                     AND datetime BETWEEN %s AND %s
+    #             )
+    #             SELECT 
+    #                 week,
+    #                 MAX(high) as week_high,
+    #                 MIN(low) as week_low,
+    #                 MAX(CASE WHEN rn = 1 THEN close END) as week_close
+    #             FROM 
+    #                 weekly_data
+    #             GROUP BY 
+    #                 week, stock
+    #             ORDER BY 
+    #                 week
+    #         """, (symbol, start_date, end_date))
+    #         db_data = cur.fetchall()
+    # finally:
+    #     conn.close()
+
     try:
         with conn.cursor() as cur:
+            # Check if we have data for this day
             cur.execute(f"""
-                WITH weekly_data AS (
+                SELECT COUNT(*) 
+                FROM {daily_table_name} 
+                WHERE DATE(datetime) = DATE(%s) AND stock = %s
+            """, (end_date, symbol))
+            
+            has_trading = cur.fetchone()[0] > 0
+            
+            if not has_trading:
+                print(f"No trading data for {symbol} on {end_date.date()}. Skipping process.")
+                return None
+
+            # If it is a trading day, proceed with weekly calculations
+            cur.execute(f"""
+                WITH RECURSIVE weeks AS (
+                    -- Base case: start with the end_date
+                    SELECT %s::timestamp as week_end
+                    UNION ALL
+                    -- Recursive case: subtract 7 days
+                    SELECT (week_end - interval '7 days')::timestamp
+                    FROM weeks
+                    WHERE week_end - interval '7 days' >= %s::timestamp - interval '7 days'
+                ),
+                date_periods AS (
                     SELECT 
-                        date_trunc('week', datetime) as week,
-                        stock,
-                        high,
-                        low,
-                        close,
-                        ROW_NUMBER() OVER (PARTITION BY date_trunc('week', datetime), stock ORDER BY datetime DESC) as rn
-                    FROM 
-                        {table_name}
-                    WHERE 
-                        stock = %s 
-                        AND datetime BETWEEN %s AND %s
+                        t.datetime,
+                        t.high,
+                        t.low,
+                        t.close,
+                        (SELECT min(w.week_end)
+                         FROM weeks w
+                         WHERE w.week_end >= t.datetime) as week_end
+                    FROM {daily_table_name} t
+                    WHERE stock = %s 
+                    AND datetime BETWEEN %s AND %s
+                ),
+                weekly_data AS (
+                    SELECT 
+                        week_end as week,
+                        MAX(high) as week_high,
+                        MIN(low) as week_low,
+                        (array_agg(close ORDER BY datetime DESC))[1] as week_close
+                    FROM date_periods
+                    GROUP BY week_end
                 )
                 SELECT 
                     week,
-                    MAX(high) as week_high,
-                    MIN(low) as week_low,
-                    MAX(CASE WHEN rn = 1 THEN close END) as week_close
-                FROM 
-                    weekly_data
-                GROUP BY 
-                    week, stock
-                ORDER BY 
-                    week
-            """, (symbol, start_date, end_date))
+                    week_high,
+                    week_low,
+                    week_close
+                FROM weekly_data
+                ORDER BY week DESC
+            """, (end_date, start_date, symbol, start_date, end_date))
+            
             db_data = cur.fetchall()
     finally:
         conn.close()
+
+    if not db_data:
+        return None
 
     df = pd.DataFrame(db_data, columns=['week', 'week_high', 'week_low', 'week_close'])
     df['week'] = pd.to_datetime(df['week'])
@@ -281,47 +346,112 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
     return df[['willr']].reset_index().rename(columns={'week': 't'}).dropna().to_dict('records')
 
 def fetch_force_index_data(symbol: str, db_params: Dict[str, Any], end_date: datetime, base: str = 'USD') -> List[Dict[str, Any]]:
-    end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    target_weekday = (end_date.weekday() - 1) % 7  # Get the weekday of the day before
-    start_date = end_date - timedelta(weeks=70)
+    # end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # target_weekday = (end_date.weekday() - 1) % 7  # Get the weekday of the day before
+    # start_date = end_date - timedelta(weeks=70)
 
-    # Adjust start_date to the target weekday
-    start_date -= timedelta(days=(start_date.weekday() - target_weekday) % 7)
+    # # Adjust start_date to the target weekday
+    # start_date -= timedelta(days=(start_date.weekday() - target_weekday) % 7)
 
-    table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+    daily_table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+    weekly_table_name = f"crypto_weekly_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
 
     # Fetch data from TimescaleDB
+    # conn = psycopg2.connect(**db_params)
+    # try:
+    #     with conn.cursor() as cur:
+    #         cur.execute(f"""
+    #             WITH weekly_data AS (
+    #                 SELECT 
+    #                     date_trunc('week', datetime) as week,
+    #                     stock,
+    #                     close,
+    #                     volume,
+    #                     ROW_NUMBER() OVER (PARTITION BY date_trunc('week', datetime), stock ORDER BY datetime DESC) as rn
+    #                 FROM 
+    #                     {daily_table_name}
+    #                 WHERE 
+    #                     stock = %s 
+    #                     AND datetime BETWEEN %s AND %s
+    #             )
+    #             SELECT 
+    #                 week,
+    #                 MAX(CASE WHEN rn = 1 THEN close END) as week_close,
+    #                 SUM(volume) as week_volume
+    #             FROM 
+    #                 weekly_data
+    #             GROUP BY 
+    #                 week, stock
+    #             ORDER BY 
+    #                 week
+    #         """, (symbol, start_date, end_date))
+    #         db_data = cur.fetchall()
+    # finally:
+    #     conn.close()
+
+    end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(weeks=70)
+
     conn = psycopg2.connect(**db_params)
     try:
         with conn.cursor() as cur:
+            # Check if we have data for this day
             cur.execute(f"""
-                WITH weekly_data AS (
+                SELECT COUNT(*) 
+                FROM {daily_table_name} 
+                WHERE DATE(datetime) = DATE(%s) AND stock = %s
+            """, (end_date, symbol))
+            
+            has_trading = cur.fetchone()[0] > 0
+      
+            if not has_trading:
+                print(f"No trading data for {symbol} on {end_date.date()}. Skipping process.")
+                return None
+
+            # If it is a trading day, proceed with weekly calculations
+            cur.execute(f"""
+                WITH RECURSIVE weeks AS (
+                    -- Base case: start with the end_date
+                    SELECT %s::timestamp as week_end
+                    UNION ALL
+                    -- Recursive case: subtract 7 days
+                    SELECT (week_end - interval '7 days')::timestamp
+                    FROM weeks
+                    WHERE week_end - interval '7 days' >= %s::timestamp - interval '7 days'
+                ),
+                date_periods AS (
                     SELECT 
-                        date_trunc('week', datetime) as week,
-                        stock,
-                        close,
-                        volume,
-                        ROW_NUMBER() OVER (PARTITION BY date_trunc('week', datetime), stock ORDER BY datetime DESC) as rn
-                    FROM 
-                        {table_name}
-                    WHERE 
-                        stock = %s 
-                        AND datetime BETWEEN %s AND %s
+                        t.datetime,
+                        t.close,
+                        t.volume,
+                        (SELECT min(w.week_end)
+                         FROM weeks w
+                         WHERE w.week_end >= t.datetime) as week_end
+                    FROM {daily_table_name} t
+                    WHERE stock = %s 
+                    AND datetime BETWEEN %s AND %s
+                ),
+                weekly_data AS (
+                    SELECT 
+                        week_end as week,
+                        (array_agg(close ORDER BY datetime DESC))[1] as week_close,
+                        SUM(volume) as week_volume
+                    FROM date_periods
+                    GROUP BY week_end
                 )
                 SELECT 
                     week,
-                    MAX(CASE WHEN rn = 1 THEN close END) as week_close,
-                    SUM(volume) as week_volume
-                FROM 
-                    weekly_data
-                GROUP BY 
-                    week, stock
-                ORDER BY 
-                    week
-            """, (symbol, start_date, end_date))
+                    week_close,
+                    week_volume
+                FROM weekly_data
+                ORDER BY week DESC
+            """, (end_date, start_date, symbol, start_date, end_date))
+            
             db_data = cur.fetchall()
     finally:
         conn.close()
+    if not db_data:
+        return None
 
     df = pd.DataFrame(db_data, columns=['datetime', 'close', 'volume'])
     df['datetime'] = pd.to_datetime(df['datetime'])

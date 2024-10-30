@@ -134,9 +134,11 @@ def main():
     days_since_sunday = (current.weekday() + 1) % 7
 
     # Subtract those days to get to the most recent Sunday
-    end_date = current - timedelta(days=days_since_sunday)
+    # end_date = current - timedelta(days=days_since_sunday)
+    end_date = current - timedelta(days=3)
 
-    dates_to_process = [end_date - timedelta(weeks=i) for i in range(1)]
+
+    dates_to_process = [end_date - timedelta(days=i) for i in range(10)]
     # print(f"{dates_to_process}")
 
     # Uncomment the next line to limit processing to the first few stocks (for testing)

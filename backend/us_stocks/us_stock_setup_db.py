@@ -64,6 +64,13 @@ def setup_database():
 
             """)
 
+            create_table(cur, 'us_alerts_table', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                alert TEXT,
+                CONSTRAINT us_alerts_pkey PRIMARY KEY (datetime, stock)
+            """)
+
 
             # Create US daily time series table
             create_table(cur, 'us_daily_table', """
@@ -124,6 +131,7 @@ def setup_database():
             for table, columns in {
                 'us_screener_table': ['stock', 'market_cap', 'pe_ratio', 'pb_ratio', 'peg_ratio', 
                              'sales_change_percent', 'ebitda_change_percent'],
+                'us_alerts_table': ['stock'],
                 'us_daily_table': ['stock'],
                 'us_weekly_table': ['stock'],
                 'us_quarterly_table': ['stock']
