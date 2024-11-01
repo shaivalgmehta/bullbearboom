@@ -342,7 +342,7 @@ def fetch_force_index_data(symbol: str, db_params: Dict[str, Any], end_date: dat
     df.set_index('datetime', inplace=True)
 
     df.sort_index(inplace=True)
-    print(f'{df}')
+    # print(f'{df}')
     # Calculate Force Index
     df['force_index'] = (df['close'] - df['close'].shift(1)) * df['volume']
 
