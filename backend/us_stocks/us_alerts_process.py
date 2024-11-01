@@ -28,15 +28,21 @@ def process_oversold_alerts(date):
                 DELETE FROM us_alerts_table
                 WHERE DATE(datetime) = DATE(%s)
             """, (date,))
-
-            # Find stocks where both alerts are triggered
+            
+            # Find stocks where both alerts are triggered and join with daily table for stock name
             cur.execute("""
-                SELECT datetime, stock
-                FROM us_weekly_table
-                WHERE DATE(datetime) = DATE(%s)
-                AND williams_r_momentum_alert_state = '$$$'
-                AND force_index_alert_state = '$$$'
-            """, (date,))
+                SELECT w.datetime, w.stock, d.stock_name
+                FROM us_weekly_table w
+                LEFT JOIN (
+                    SELECT DISTINCT ON (stock) stock, stock_name
+                    FROM us_daily_table
+                    WHERE DATE(datetime) = DATE(%s)
+                    ORDER BY stock, datetime DESC
+                ) d ON w.stock = d.stock
+                WHERE DATE(w.datetime) = DATE(%s)
+                AND w.williams_r_momentum_alert_state = '$$$'
+                AND w.force_index_alert_state = '$$$'
+            """, (date, date,))
             
             alerts = cur.fetchall()
             
@@ -44,11 +50,12 @@ def process_oversold_alerts(date):
                 values = [(
                     alert[0],  # datetime
                     alert[1],  # stock
+                    alert[2],  # stock name
                     'Oversold'  # alert type
                 ) for alert in alerts]
                 
                 execute_values(cur, """
-                    INSERT INTO us_alerts_table (datetime, stock, alert)
+                    INSERT INTO us_alerts_table (datetime, stock, stock_name, alert)
                     VALUES %s
                 """, values)
             
@@ -57,7 +64,7 @@ def process_oversold_alerts(date):
 
 def main():
     current_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    dates_to_process = [current_date - timedelta(days=i) for i in range(5)]
+    dates_to_process = [current_date - timedelta(days=i) for i in range(7)]
     dates_to_process.reverse()
 
     for date in dates_to_process:

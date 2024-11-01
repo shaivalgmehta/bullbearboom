@@ -185,7 +185,7 @@ def fetch_missing_data_from_polygon(symbol: str, dates: pd.DatetimeIndex, POLYGO
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             
             # Adjust volume by multiplying with close price
-            df['volume'] = df['volume'] * df['close']
+            # df['volume'] = df['volume'] * df['close']
             return df[['open', 'close', 'volume', 'high', 'low']]
         else:
             print(f"No results found for {symbol} between {start_date} and {end_date}")
@@ -225,38 +225,6 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
 
     # Fetch data from TimescaleDB
     conn = psycopg2.connect(**db_params)
-    # try:
-    #     with conn.cursor() as cur:
-    #         cur.execute(f"""
-    #             WITH weekly_data AS (
-    #                 SELECT 
-    #                     date_trunc('week', datetime) as week,
-    #                     stock,
-    #                     high,
-    #                     low,
-    #                     close,
-    #                     ROW_NUMBER() OVER (PARTITION BY date_trunc('week', datetime), stock ORDER BY datetime DESC) as rn
-    #                 FROM 
-    #                     {daily_table_name}
-    #                 WHERE 
-    #                     stock = %s 
-    #                     AND datetime BETWEEN %s AND %s
-    #             )
-    #             SELECT 
-    #                 week,
-    #                 MAX(high) as week_high,
-    #                 MIN(low) as week_low,
-    #                 MAX(CASE WHEN rn = 1 THEN close END) as week_close
-    #             FROM 
-    #                 weekly_data
-    #             GROUP BY 
-    #                 week, stock
-    #             ORDER BY 
-    #                 week
-    #         """, (symbol, start_date, end_date))
-    #         db_data = cur.fetchall()
-    # finally:
-    #     conn.close()
 
     try:
         with conn.cursor() as cur:
@@ -267,13 +235,6 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
                 WHERE DATE(datetime) = DATE(%s) AND stock = %s
             """, (end_date, symbol))
             
-            has_trading = cur.fetchone()[0] > 0
-            
-            if not has_trading:
-                print(f"No trading data for {symbol} on {end_date.date()}. Skipping process.")
-                return None
-
-            # If it is a trading day, proceed with weekly calculations
             cur.execute(f"""
                 WITH RECURSIVE weeks AS (
                     -- Base case: start with the end_date
@@ -326,6 +287,7 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
     df['week'] = pd.to_datetime(df['week'])
     df.set_index('week', inplace=True)
     df.sort_index(inplace=True)
+    # print(f'{df}')
 
     # Convert Decimal to float
     for col in ['week_high', 'week_low', 'week_close']:
@@ -346,48 +308,10 @@ def fetch_williams_r_polygon(symbol: str, db_params: Dict[str, Any], end_date: d
     return df[['willr']].reset_index().rename(columns={'week': 't'}).dropna().to_dict('records')
 
 def fetch_force_index_data(symbol: str, db_params: Dict[str, Any], end_date: datetime, base: str = 'USD') -> List[Dict[str, Any]]:
-    # end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    # target_weekday = (end_date.weekday() - 1) % 7  # Get the weekday of the day before
-    # start_date = end_date - timedelta(weeks=70)
-
-    # # Adjust start_date to the target weekday
-    # start_date -= timedelta(days=(start_date.weekday() - target_weekday) % 7)
 
     daily_table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
     weekly_table_name = f"crypto_weekly_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
 
-    # Fetch data from TimescaleDB
-    # conn = psycopg2.connect(**db_params)
-    # try:
-    #     with conn.cursor() as cur:
-    #         cur.execute(f"""
-    #             WITH weekly_data AS (
-    #                 SELECT 
-    #                     date_trunc('week', datetime) as week,
-    #                     stock,
-    #                     close,
-    #                     volume,
-    #                     ROW_NUMBER() OVER (PARTITION BY date_trunc('week', datetime), stock ORDER BY datetime DESC) as rn
-    #                 FROM 
-    #                     {daily_table_name}
-    #                 WHERE 
-    #                     stock = %s 
-    #                     AND datetime BETWEEN %s AND %s
-    #             )
-    #             SELECT 
-    #                 week,
-    #                 MAX(CASE WHEN rn = 1 THEN close END) as week_close,
-    #                 SUM(volume) as week_volume
-    #             FROM 
-    #                 weekly_data
-    #             GROUP BY 
-    #                 week, stock
-    #             ORDER BY 
-    #                 week
-    #         """, (symbol, start_date, end_date))
-    #         db_data = cur.fetchall()
-    # finally:
-    #     conn.close()
 
     end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     start_date = end_date - timedelta(weeks=70)
@@ -402,11 +326,11 @@ def fetch_force_index_data(symbol: str, db_params: Dict[str, Any], end_date: dat
                 WHERE DATE(datetime) = DATE(%s) AND stock = %s
             """, (end_date, symbol))
             
-            has_trading = cur.fetchone()[0] > 0
+            # has_trading = cur.fetchone()[0] > 0
       
-            if not has_trading:
-                print(f"No trading data for {symbol} on {end_date.date()}. Skipping process.")
-                return None
+            # if not has_trading:
+            #     print(f"No trading data for {symbol} on {end_date.date()}. Skipping process.")
+            #     return None
 
             # If it is a trading day, proceed with weekly calculations
             cur.execute(f"""
@@ -458,7 +382,7 @@ def fetch_force_index_data(symbol: str, db_params: Dict[str, Any], end_date: dat
     df.set_index('datetime', inplace=True)
 
     df.sort_index(inplace=True)
-
+    # print(f'{df}')
     # Calculate Force Index
     df['force_index'] = (df['close'] - df['close'].shift(1)) * df['volume']
 

@@ -135,33 +135,44 @@ class StatisticsDataTransformer(BaseTransformer):
 ################# WILLIAMS R MOMENTUM ALERT TRANSFORMER & CALCULATIONS ###########################################################################
 
 class WilliamsRTransformer(BaseTransformer):
-    def __init__(self, db_connection_params):
+    def __init__(self, db_connection_params, ema_length=21):
+        """
+        Initialize transformer with Pine Script matching EMA calculation
+        ema_length: matches input(defval=21) for the EMA
+        """
         self.db_connection_params = db_connection_params
+        self.ema_length = ema_length
+
+    def calculate_pine_script_ema(self, data: pd.Series, length: int) -> pd.Series:
+        """Calculate EMA using Pine Script's method"""
+        alpha = 2 / (length + 1)
+        return data.ewm(alpha=alpha, adjust=False).mean()
 
     def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
+        
         try:
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
             df = df.sort_values('datetime')
             
-            # Ensure we have at least 21 weeks of data
-            if len(df) < 21:
-                raise ValueError(f"Insufficient data for {symbol}. Need at least 21 weeks, got {len(df)}.")
+            # Ensure we have enough data
+            if len(df) < self.ema_length:
+                raise ValueError(f"Insufficient data for {symbol}. Need at least {self.ema_length} periods, got {len(df)}.")
             
-            # Use only the last 21 weeks of data and create a copy
-            df_last_21 = df.tail(21).copy()
-            
-            # Calculate the 21-week EMA of Williams %R
-            df_last_21['willr_ema'] = df_last_21['willr'].ewm(span=21, adjust=False).mean()
+            # Calculate EMA of Williams %R using Pine Script's method
+            df['willr_ema'] = self.calculate_pine_script_ema(df['willr'], self.ema_length)
             
             # Get the latest values
-            latest_williams_r = float(df_last_21['willr'].iloc[-1])
-            latest_datetime = df_last_21['datetime'].iloc[-1]
-            latest_ema = float(df_last_21['willr_ema'].iloc[-1])
-
-            prev_alert_state = self._get_previous_alert_state(symbol, latest_datetime)
+            latest_williams_r = float(df['willr'].iloc[-1])
+            latest_datetime = df['datetime'].iloc[-1]
+            latest_ema = float(df['willr_ema'].iloc[-1])
             
-            williams_r_momentum_alert_state = self._determine_alert_state(latest_williams_r, latest_ema, prev_alert_state)
+            prev_alert_state = self._get_previous_alert_state(symbol, latest_datetime)
+            williams_r_momentum_alert_state = self._determine_alert_state(
+                latest_williams_r, 
+                latest_ema, 
+                prev_alert_state
+            )
             
             return {
                 'datetime': latest_datetime,
@@ -169,6 +180,7 @@ class WilliamsRTransformer(BaseTransformer):
                 'williams_r_ema': latest_ema,
                 'williams_r_momentum_alert_state': williams_r_momentum_alert_state
             }
+            
         except Exception as e:
             print(f"Error in WilliamsRTransformer for {symbol}: {str(e)}")
             return {
@@ -177,7 +189,7 @@ class WilliamsRTransformer(BaseTransformer):
                 'williams_r_ema': None,
                 'williams_r_momentum_alert_state': None
             }
-            
+
     def _get_previous_alert_state(self, symbol, latest_datetime):
         conn = psycopg2.connect(**self.db_connection_params)
         cur = conn.cursor()
@@ -212,46 +224,119 @@ class WilliamsRTransformer(BaseTransformer):
         else:  # prev_state == '-'
             return '$$$' if meets_criteria else '-'
 
+
 class ForceIndexTransformer(BaseTransformer):
-    def __init__(self, db_connection_params):
+    def __init__(self, db_connection_params, fast_period=4, slow_period=14):
         self.db_connection_params = db_connection_params
+        self.base = 'usd'
+        self.fast_period = fast_period
+        self.slow_period = slow_period
+        
+    def calculate_force_index_ema(self, df: pd.DataFrame, period: int) -> float:
+        """
+        Calculate EMA of the provided force_index using Pine Script's method,
+        initializing with SMA for the first value
+        """
+        # Convert force_index to float type
+        force_index = df['force_index'].astype(float)
+        
+        # Calculate initial SMA
+        sma = force_index.iloc[:period].mean()
+        
+        # Initialize EMA array with the SMA as first value
+        ema = [float(sma)]  # Ensure float type
+        alpha = 2 / (period + 1)
+        
+        # Calculate EMA values after the initial SMA
+        for force_value in force_index.iloc[period:]:
+            ema_value = (float(force_value) - ema[-1]) * alpha + ema[-1]
+            ema.append(ema_value)
+            
+        return float(ema[-1])
+
+    def _get_previous_values(self, symbol, latest_datetime):
+        """
+        Get previous Force Index values and alert state from database
+        """
+        conn = psycopg2.connect(**self.db_connection_params)
+        cur = conn.cursor()
+        
+        try:
+            cur.execute("""
+                SELECT 
+                    force_index_7_week,
+                    force_index_52_week,
+                    force_index_alert_state
+                FROM us_weekly_table 
+                WHERE datetime < %s AND stock = %s 
+                ORDER BY datetime DESC 
+                LIMIT 1
+            """, (latest_datetime, symbol,))
+            
+            result = cur.fetchone()
+            
+            if result:
+                return {
+                    'force_index_7_week': float(result[0]) if result[0] is not None else None,
+                    'force_index_52_week': float(result[1]) if result[1] is not None else None,
+                    'alert_state': result[2]
+                }
+            return None
+            
+        finally:
+            cur.close()
+            conn.close()
 
     def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
         try:
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
             df = df.sort_values('datetime')
-
-            latest_datetime = df['datetime'].iloc[-1]
-
-            # Current week calculations
-            # For 7-week calculation, use last 8 points (current + 7 previous)
-            df_7week = df.tail(8)
-            force_index_7_week = float(df_7week['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
-            # print(f'{df_7week}')
-            # print(f'{latest_datetime}')
-
-            # For 52-week calculation, use last 53 points (current + 52 previous)
-            df_52week = df.tail(53)
-            force_index_52_week = float(df_52week['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
-
-            # Last week calculations
-            last_week_data = df[df['datetime'] < df['datetime'].iloc[-1]]  # Exclude the latest week
-
-            # For 7-week calculation of last week, use last 8 points
-            last_week_data_7week = last_week_data.tail(8)
-            last_week_force_index_7_week = float(last_week_data_7week['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
-
-            # For 52-week calculation of last week, use last 53 points
-            last_week_data_52week = last_week_data.tail(53)
-            last_week_force_index_52_week = float(last_week_data_52week['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
-
-
-            prev_alert_state = self._get_previous_alert_state(symbol, latest_datetime)
-            force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 
-                                                      last_week_force_index_7_week, last_week_force_index_52_week, 
-                                                      prev_alert_state)
             
+            if df.empty:
+                raise ValueError(f"No data available for {symbol}")
+                
+            latest_datetime = df['datetime'].iloc[-1]
+            
+            # Convert force_index to float
+            df['force_index'] = df['force_index'].astype(float)
+            # print(f'{df}')
+            # Calculate current week's Force Index values
+            force_index_7_week = self.calculate_force_index_ema(df, self.fast_period)
+            force_index_52_week = self.calculate_force_index_ema(df, self.slow_period)
+
+            # Get previous week's values from database
+            prev_values = self._get_previous_values(symbol, latest_datetime)
+            
+            if prev_values is None:
+                last_week_force_index_7_week = force_index_7_week
+                last_week_force_index_52_week = force_index_52_week
+                prev_alert_state = None
+            else:
+                last_week_force_index_7_week = prev_values['force_index_7_week']
+                last_week_force_index_52_week = prev_values['force_index_52_week']
+                prev_alert_state = prev_values['alert_state']
+
+            # Ensure we have valid values before determining alert state
+            if any(x is None for x in [force_index_7_week, force_index_52_week, 
+                                     last_week_force_index_7_week, last_week_force_index_52_week]):
+                return {
+                    'datetime': None,
+                    'force_index_7_week': None,
+                    'force_index_52_week': None,
+                    'last_week_force_index_7_week': None,
+                    'last_week_force_index_52_week': None,
+                    'force_index_alert_state': None
+                }
+
+            force_index_alert_state = self._determine_alert_state(
+                force_index_7_week, 
+                force_index_52_week,
+                last_week_force_index_7_week, 
+                last_week_force_index_52_week,
+                prev_alert_state
+            )
+
             return {
                 'datetime': latest_datetime,
                 'force_index_7_week': force_index_7_week,
@@ -260,35 +345,10 @@ class ForceIndexTransformer(BaseTransformer):
                 'last_week_force_index_52_week': last_week_force_index_52_week,
                 'force_index_alert_state': force_index_alert_state
             }
+            
         except Exception as e:
             print(f"Error in ForceIndexTransformer for {symbol}: {str(e)}")
-            return {
-                'datetime': None,
-                'force_index_7_week': None,
-                'force_index_52_week': None,
-                'last_week_force_index_7_week': None,
-                'last_week_force_index_52_week': None,
-                'force_index_alert_state': None
-            }
-
-    def _get_previous_alert_state(self, symbol, latest_datetime):
-        conn = psycopg2.connect(**self.db_connection_params)
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT force_index_alert_state 
-            FROM us_weekly_table 
-            WHERE datetime < %s AND stock = %s 
-            ORDER BY datetime DESC 
-            LIMIT 1
-        """, (latest_datetime, symbol,))
-        
-        result = cur.fetchone()
-        
-        cur.close()
-        conn.close()
-        
-        return result[0] if result else None
+            return None  # Return None instead of dict with NULL values
 
     def _determine_alert_state(self, fi_7_week, fi_52_week, last_fi_7_week, last_fi_52_week, prev_state):
         upward_crossover = (last_fi_7_week <= last_fi_52_week) and (fi_7_week > fi_52_week)
@@ -301,7 +361,6 @@ class ForceIndexTransformer(BaseTransformer):
                 return '$$$'
         else:
             return '-'
-
 ####################################################################################################################
 
 def get_transformer(source: str, db_params=None) -> BaseTransformer:

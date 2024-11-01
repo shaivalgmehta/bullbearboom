@@ -151,7 +151,7 @@ class CryptoBaseConverter:
                 df = df.join(base_prices, how='left', rsuffix='_base')
                 for col in ['open', 'close', 'high', 'low']:
                     df[col] = df[col] / df['close_base']
-                df['volume'] = df['volume'] / df['close_base']
+                # df['volume'] = df['volume'] / df['close_base']
                 df['last_modified_date'] = datetime.now(pytz.UTC)
                 
                 # Select only the columns we need

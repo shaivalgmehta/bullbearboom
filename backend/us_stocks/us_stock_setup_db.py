@@ -67,6 +67,7 @@ def setup_database():
             create_table(cur, 'us_alerts_table', """
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
+                stock_name TEXT,
                 alert TEXT,
                 CONSTRAINT us_alerts_pkey PRIMARY KEY (datetime, stock)
             """)

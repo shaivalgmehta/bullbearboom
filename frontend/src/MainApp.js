@@ -3,11 +3,10 @@ import { BrowserRouter as Router, Route, Link, Routes } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, IconButton } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import StockApp from './StockApp';
+import AlertsApp from './AlertsApp';
 import CryptoApp from './CryptoApp';
 import CryptoETHApp from './CryptoETHApp';
 import CryptoBTCApp from './CryptoBTCApp';
-
-
 
 function MainApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -36,6 +35,9 @@ function MainApp() {
             <Button color="inherit" component={Link} to="/">
               Stocks
             </Button>
+            <Button color="inherit" component={Link} to="/alerts">
+              Alerts
+            </Button>
             <Button color="inherit" component={Link} to="/crypto">
               Crypto
             </Button>
@@ -48,9 +50,10 @@ function MainApp() {
           </Toolbar>
         </AppBar>
 
-        <Box sx={{ flexGrow: 1, mt: '64px' }}> {/* Adjust this value if your AppBar height is different */}
+        <Box sx={{ flexGrow: 1, mt: '64px' }}>
           <Routes>
             <Route path="/" element={<StockApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="/alerts" element={<AlertsApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="/crypto" element={<CryptoApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="/crypto_eth" element={<CryptoETHApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="/crypto_btc" element={<CryptoBTCApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />

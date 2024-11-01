@@ -66,17 +66,17 @@ def process_stock_batch(batch, base, end_date):
         process_stock(stock, base, end_date)
 
 
-def get_previous_monday(date):
-    """Find the Monday of the previous week."""
-    previous_monday = date - timedelta(days=(date.weekday() or 7))
+# def get_previous_monday(date):
+#     """Find the Monday of the previous week."""
+#     previous_monday = date - timedelta(days=(date.weekday() or 7))
 
-    return previous_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+#     return previous_monday.replace(hour=0, minute=0, second=0, microsecond=0)
 
 def rank_weekly_metrics(conn, base, end_date):
     table_name = f"crypto_weekly_table{'_' + base if base != 'usd' else ''}"
     
     # Get the Monday of the previous week
-    previous_monday = get_previous_monday(end_date)
+    # previous_monday = get_previous_monday(end_date)
     
     # Fields to rank
     fields = ['williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week']
@@ -89,7 +89,7 @@ def rank_weekly_metrics(conn, base, end_date):
     """
     
     with conn.cursor() as cur:
-        cur.execute(query, (previous_monday,))
+        cur.execute(query, (end_date,))
         results = cur.fetchall()
     
     # Create DataFrame
@@ -111,14 +111,14 @@ def rank_weekly_metrics(conn, base, end_date):
     with conn.cursor() as cur:
         for _, row in df.iterrows():
             ranks = [int(row[f"{field}_rank"]) if pd.notnull(row[f"{field}_rank"]) else None for field in fields]
-            cur.execute(update_query, ranks + [row['stock'], previous_monday])
+            cur.execute(update_query, ranks + [row['stock'], end_date])
     
     conn.commit()
     
     # Print statistics
     for field in fields:
         ranked_count = df[f"{field}_rank"].notna().sum()
-        print(f"Rankings updated for {base.upper()} base on {previous_monday}")
+        print(f"Rankings updated for {base.upper()} base on {end_date}")
         print(f"Ranked {ranked_count} out of {len(df)} stocks for {field}.")
 
     #################### MAIN PROCESS ########################################################
@@ -134,11 +134,12 @@ def main():
     days_since_sunday = (current.weekday() + 1) % 7
 
     # Subtract those days to get to the most recent Sunday
-    # end_date = current - timedelta(days=days_since_sunday)
-    end_date = current - timedelta(days=3)
+    end_date = current - timedelta(days=days_since_sunday)
+    # end_date = current - timedelta(days=3)
 
 
-    dates_to_process = [end_date - timedelta(days=i) for i in range(10)]
+    dates_to_process = [end_date - timedelta(weeks=i) for i in range(10)]
+    dates_to_process.reverse()
     # print(f"{dates_to_process}")
 
     # Uncomment the next line to limit processing to the first few stocks (for testing)

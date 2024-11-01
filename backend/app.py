@@ -90,6 +90,29 @@ def get_latest_stock_data():
         logging.error(f"Error fetching stock data: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stocks/alerts')
+def get_alerts_data():
+    logging.info("Fetching alerts for all stocks")
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                query = """
+                    SELECT *
+                    FROM us_alerts_table
+                    WHERE datetime >= NOW() - INTERVAL '30 days'
+                    ORDER BY datetime DESC
+                """
+                
+                cur.execute(query)
+                data = cur.fetchall()
+                
+                logging.info(f"Fetched {len(data)} alerts from the last 30 days")
+                return jsonify(data)
+                
+    except Exception as e:
+        logging.error(f"Error fetching alerts data: {e}")
+        return jsonify({"error": "Failed to fetch alerts data"}), 500
+
 @app.route('/api/crypto/latest')
 def get_latest_crypto_data():
     logging.info("Fetching latest data for all stocks")
