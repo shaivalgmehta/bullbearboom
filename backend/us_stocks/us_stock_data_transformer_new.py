@@ -3,6 +3,8 @@ from typing import Dict, Any, List
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
+from datetime import datetime, timedelta
+
 
 class BaseTransformer(ABC):
     @abstractmethod
@@ -55,6 +57,7 @@ class CoreDataTransformer(BaseTransformer):
             stock_data = data['stock_data']
             technical_indicator = data['technical_indicator']
             statistics = data['statistics']
+            price_changes = data.get('price_changes', {})
             
             # Handle case where technical_indicator is empty list
             if not technical_indicator:
@@ -77,7 +80,10 @@ class CoreDataTransformer(BaseTransformer):
                 'pe_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['trailing_pe']),
                 'ev_ebitda': self._parse_numeric(statistics['statistics']['valuations_metrics']['enterprise_to_ebitda']),
                 'pb_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_book_mrq']),
-                'peg_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['peg_ratio'])
+                'peg_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['peg_ratio']),
+                'price_change_3m': self._parse_numeric(price_changes.get('price_change_3m')),
+                'price_change_6m': self._parse_numeric(price_changes.get('price_change_6m')),
+                'price_change_12m': self._parse_numeric(price_changes.get('price_change_12m'))
             }
             return [transformed_data]
         except KeyError as e:
@@ -213,7 +219,7 @@ class WilliamsRTransformer(BaseTransformer):
         if williams_r is None or ema is None:
             return '-'
         
-        meets_criteria = williams_r > ema and williams_r > -80
+        meets_criteria = williams_r > ema and williams_r < -50
         
         if prev_state is None:
             return '$$$' if meets_criteria else '-'
@@ -361,6 +367,152 @@ class ForceIndexTransformer(BaseTransformer):
                 return '$$$'
         else:
             return '-'
+
+############################## ANCHOR OBV CALCULATIONS #############################################################
+
+class AnchoredOBVTransformer(BaseTransformer):
+    def __init__(self, db_connection_params):
+        self.db_connection_params = db_connection_params
+
+    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
+        try:
+            df = pd.DataFrame(data)
+            df['datetime'] = pd.to_datetime(df['t'])
+            df = df.sort_values('datetime')
+
+            if df.empty:
+                raise ValueError(f"No data available for {symbol}")
+                
+            latest_datetime = df['datetime'].iloc[-1]
+            anchor_date = self._get_anchor_date(latest_datetime)
+            
+            # Calculate OBV
+            current_obv = self._calculate_obv(df, anchor_date)
+            
+            # Calculate confidence
+            confidence = self._calculate_confidence(df, anchor_date)
+            
+            # Get previous values
+            prev_values = self._get_previous_values(symbol, latest_datetime)
+            prev_obv = prev_values.get('anchored_obv') if prev_values else None
+            
+            # Determine alert state
+            alert_state = self._determine_alert_state(current_obv, prev_obv)
+            
+            return {
+                'datetime': latest_datetime,
+                'anchored_obv': current_obv,
+                'anchor_date': anchor_date,
+                'obv_confidence': confidence,
+                'anchored_obv_alert_state': alert_state
+            }
+            
+        except Exception as e:
+            print(f"Error in AnchoredOBVTransformer for {symbol}: {str(e)}")
+            return {
+                'datetime': None,
+                'anchored_obv': None,
+                'anchor_date': None,
+                'obv_confidence': None,
+                'anchored_obv_alert_state': None
+            }
+
+    def _get_anchor_date(self, current_date: datetime) -> datetime:
+        """Get the start of the current quarter"""
+        month = current_date.month
+        quarter_start_month = ((month - 1) // 3) * 3 + 1
+        
+        return datetime(
+            current_date.year, 
+            quarter_start_month, 
+            1, 
+            tzinfo=current_date.tzinfo
+        )
+
+    def _calculate_obv(self, df: pd.DataFrame, anchor_date: datetime) -> float:
+        """Calculate OBV from anchor date"""
+        # Filter data from anchor date
+        df = df[df['datetime'] >= anchor_date].copy()
+        
+        if len(df) < 2:
+            return 0
+        
+        # Initialize OBV
+        df['obv'] = 0
+        
+        # Calculate daily price changes
+        df['price_change'] = df['c'].diff()
+        
+        # Calculate OBV
+        for i in range(1, len(df)):
+            if df['price_change'].iloc[i] > 0:
+                df.loc[df.index[i], 'obv'] = df['obv'].iloc[i-1] + df['v'].iloc[i]
+            elif df['price_change'].iloc[i] < 0:
+                df.loc[df.index[i], 'obv'] = df['obv'].iloc[i-1] - df['v'].iloc[i]
+            else:
+                df.loc[df.index[i], 'obv'] = df['obv'].iloc[i-1]
+        return float(df['obv'].iloc[-1])
+
+    def _calculate_confidence(self, df: pd.DataFrame, anchor_date: datetime) -> float:
+        """Calculate confidence based on data completeness"""
+        # Get all dates from anchor to latest
+        date_range = pd.date_range(
+            start=anchor_date,
+            end=df['datetime'].max(),
+            freq='W'
+        )
+        
+        # Calculate the percentage of weeks we have data for
+        actual_weeks = df[df['datetime'] >= anchor_date]['datetime'].nunique()
+        expected_weeks = len(date_range)
+        
+        if expected_weeks == 0:
+            return 0
+            
+        return (actual_weeks / expected_weeks) * 100
+
+    def _get_previous_values(self, symbol: str, latest_datetime: datetime) -> Dict[str, Any]:
+        """Get previous OBV value for comparison"""
+        conn = psycopg2.connect(**self.db_connection_params)
+        cur = conn.cursor()
+        
+        try:
+            cur.execute("""
+                SELECT datetime, anchored_obv, anchor_date
+                FROM us_weekly_table
+                WHERE stock = %s 
+                  AND datetime < %s
+                  AND anchored_obv IS NOT NULL
+                ORDER BY datetime DESC
+                LIMIT 1
+            """, (symbol, latest_datetime))
+            
+            result = cur.fetchone()
+            
+            if result:
+                return {
+                    'datetime': result[0],
+                    'anchored_obv': result[1],
+                    'anchor_date': result[2]
+                }
+            return None
+        finally:
+            cur.close()
+            conn.close()
+
+    def _determine_alert_state(self, current_obv: float, prev_obv: float) -> str:
+        """Generate alert state based on OBV crossover"""
+        if current_obv is None or prev_obv is None:
+            return '-'
+            
+        # Generate $$$ when crossing from negative to positive
+        if current_obv > 0 and prev_obv <= 0:
+            return '$$$'
+        
+        return '-'
+
+
+
 ####################################################################################################################
 
 def get_transformer(source: str, db_params=None) -> BaseTransformer:
@@ -374,5 +526,7 @@ def get_transformer(source: str, db_params=None) -> BaseTransformer:
         return ForceIndexTransformer(db_params)
     elif source.lower() == 'statistics':
         return StatisticsDataTransformer()
+    elif source.lower() == 'anchored_obv': 
+        return AnchoredOBVTransformer(db_params)
     else:
         raise ValueError(f"Unsupported data source: {source}")

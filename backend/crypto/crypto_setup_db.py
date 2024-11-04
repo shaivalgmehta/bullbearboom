@@ -49,8 +49,19 @@ def setup_database():
                 williams_r_ema_rank NUMERIC,
                 force_index_7_week_rank NUMERIC,
                 force_index_52_week_rank NUMERIC,
+                price_change_3m NUMERIC,
+                price_change_6m NUMERIC,
+                price_change_12m NUMERIC,                   
                 CONSTRAINT crypto_screener_pkey PRIMARY KEY (datetime, stock)
 
+            """)
+
+            create_table(cur, 'crypto_alerts_table', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                crypto_name TEXT,
+                alert TEXT,
+                CONSTRAINT crypto_alerts_pkey PRIMARY KEY (datetime, stock)
             """)
 
 
@@ -69,6 +80,9 @@ def setup_database():
                 ema_metric NUMERIC,
                 ema_rank NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
+                price_change_3m NUMERIC,
+                price_change_6m NUMERIC,
+                price_change_12m NUMERIC,                   
                 CONSTRAINT crypto_daily_pkey PRIMARY KEY (datetime, stock)
             """)
 
@@ -89,6 +103,10 @@ def setup_database():
                 last_week_force_index_7_week NUMERIC,
                 last_week_force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,
+                anchored_obv NUMERIC,
+                anchored_obv_alert_state TEXT,
+                anchor_date TIMESTAMPTZ,
+                obv_confidence NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT crypto_weekly_pkey PRIMARY KEY (datetime, stock)
             """)
@@ -110,6 +128,13 @@ def setup_database():
 
             """)
 
+            create_table(cur, 'crypto_alerts_table_eth', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                crypto_name TEXT,
+                alert TEXT,
+                CONSTRAINT crypto_alerts_eth_pkey PRIMARY KEY (datetime, stock)
+            """)
 
             # Create Crypto ETH daily time series table
             create_table(cur, 'crypto_daily_table_eth', """
@@ -162,6 +187,13 @@ def setup_database():
 
             """)
 
+            create_table(cur, 'crypto_alerts_table_btc', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                crypto_name TEXT,
+                alert TEXT,
+                CONSTRAINT crypto_alerts_btc_pkey PRIMARY KEY (datetime, stock)
+            """)
 
             # Create Crypto BTC daily time series table
             create_table(cur, 'crypto_daily_table_btc', """
@@ -199,12 +231,15 @@ def setup_database():
             # Create indexes for all tables
             for table, columns in {
                 'crypto_screener_table': ['stock'],
+                'crypto_alerts_table': ['stock'],
                 'crypto_daily_table': ['stock', 'crypto_name'],
                 'crypto_weekly_table': ['stock'],
                 'crypto_screener_table_eth': ['stock'],
+                'crypto_alerts_table_eth': ['stock'],
                 'crypto_daily_table_eth': ['stock', 'crypto_name'],
                 'crypto_weekly_table_eth': ['stock'],
                 'crypto_screener_table_btc': ['stock'],
+                'crypto_alerts_table_btc': ['stock'],
                 'crypto_daily_table_btc': ['stock', 'crypto_name'],
                 'crypto_weekly_table_btc': ['stock']
             }.items():

@@ -7,7 +7,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data, store_stock_daily_data, fetch_daily_data_polygon
+from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data, store_stock_daily_data, fetch_daily_data_polygon, fetch_obv_data, store_obv_data
 from crypto_data_transformer_new import get_transformer
 import json
 import time
@@ -53,7 +53,17 @@ def process_stock(stock, base, end_date):
         else:
             print(f"Skipping Force Index for {symbol}/{base} due to insufficient data or other criteria not met")
 
-        if is_empty_or_none(williams_r_data) and is_empty_or_none(force_index_data):
+        obv_data = fetch_obv_data(symbol, db_params, end_date, base)
+        if not is_empty_or_none(obv_data):
+            obv_transformed_data = obv_transformer.transform(obv_data, symbol, base)
+            store_obv_data(obv_transformed_data, symbol, base)
+            print(f"OBV data for {symbol}/{base} has been processed and stored")
+        else:
+            print(f"Skipping OBV for {symbol}/{base} due to insufficient data or other criteria not met")
+
+        if (is_empty_or_none(williams_r_data) and 
+            is_empty_or_none(force_index_data) and
+            is_empty_or_none(obv_data)):
             print(f"No data processed for {symbol}/{base} due to insufficient data or other criteria not met")
         else:
             print(f"Data for {symbol}/{base} has been stored in TimescaleDB")
@@ -138,7 +148,7 @@ def main():
     # end_date = current - timedelta(days=3)
 
 
-    dates_to_process = [end_date - timedelta(weeks=i) for i in range(10)]
+    dates_to_process = [end_date - timedelta(weeks=i) for i in range(1)]
     dates_to_process.reverse()
     # print(f"{dates_to_process}")
 
@@ -149,9 +159,10 @@ def main():
     bases = ['usd', 'eth', 'btc']
 
     # Get the appropriate transformers
-    global williams_r_transformer, force_index_transformer
+    global williams_r_transformer, force_index_transformer, obv_transformer
     williams_r_transformer = get_transformer('williams_r', db_params)
     force_index_transformer = get_transformer('force_index', db_params)
+    obv_transformer = get_transformer('anchored_obv', db_params)
 
     # Process data for each week
     for end_date in dates_to_process:

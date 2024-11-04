@@ -51,6 +51,9 @@ class CryptoBaseConverter:
                 ema NUMERIC,
                 ema_metric NUMERIC,
                 ema_rank NUMERIC,
+                price_change_3m NUMERIC,
+                price_change_6m NUMERIC,
+                price_change_12m NUMERIC,                   
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT {daily_table_name}_pkey PRIMARY KEY (datetime, stock)
             )
@@ -74,6 +77,10 @@ class CryptoBaseConverter:
                 last_week_force_index_7_week NUMERIC,
                 last_week_force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,
+                anchored_obv NUMERIC,
+                anchored_obv_alert_state TEXT,
+                anchor_date TIMESTAMPTZ,
+                obv_confidence NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT {weekly_table_name}_pkey PRIMARY KEY (datetime, stock)
             )

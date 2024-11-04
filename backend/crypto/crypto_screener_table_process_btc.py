@@ -35,10 +35,10 @@ def update_screener_table_btc(selected_date=None):
             # Step 2: Insert latest daily data (today or yesterday)
             cur.execute("""
                 INSERT INTO crypto_screener_table_btc (
-                    datetime, stock, crypto_name, close, ema, ema_rank
+                    datetime, stock, crypto_name, close, ema, ema_rank, price_change_3m, price_change_6m, price_change_12m
                 )
                 SELECT DISTINCT ON (stock)
-                    datetime, stock, crypto_name, close, ema, ema_rank
+                    datetime, stock, crypto_name, close, ema, ema_rank, price_change_3m, price_change_6m, price_change_12m
                 FROM 
                     crypto_daily_table_btc
                 WHERE 
@@ -54,7 +54,7 @@ def update_screener_table_btc(selected_date=None):
                     SELECT DISTINCT ON (stock)
                         stock, datetime, williams_r, williams_r_ema, williams_r_momentum_alert_state,
                         force_index_7_week, force_index_52_week, force_index_alert_state, williams_r_rank, williams_r_ema_rank,
-                        force_index_7_week_rank, force_index_52_week_rank
+                        force_index_7_week_rank, force_index_52_week_rank, anchored_obv_alert_state
                     FROM crypto_weekly_table_btc
                     WHERE datetime > %s
                     AND stock IN (SELECT stock FROM crypto_screener_table_btc)
@@ -71,7 +71,8 @@ def update_screener_table_btc(selected_date=None):
                     williams_r_rank = w.williams_r_rank,
                     williams_r_ema_rank = w.williams_r_ema_rank,
                     force_index_7_week_rank = w.force_index_7_week_rank,
-                    force_index_52_week_rank = w.force_index_52_week_rank
+                    force_index_52_week_rank = w.force_index_52_week_rank,
+                    anchored_obv_alert_state = w.anchored_obv_alert_state
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
             """, (target_date - timedelta(days=14),))

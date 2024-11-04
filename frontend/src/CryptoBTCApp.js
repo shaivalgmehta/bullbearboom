@@ -28,17 +28,21 @@ const columnMap = {
   'force_index_7_week': '7-Week Force Index',
   'force_index_52_week': '52-Week Force Index',
   'force_index_alert_state': 'Force Index Alert',
+  'anchored_obv_alert_state': 'Anchored OBV Alert',  
   'williams_r_rank': 'Williams %R Rank',
   'williams_r_ema_rank': 'Williams %R EMA Rank',
   'force_index_7_week_rank': '7-Week Force Index Rank',
   'force_index_52_week_rank': '52-Week Force Index Rank',
   'ema_rank': '200-EMA Rank',
+  'price_change_3m': '3-Month Price Change',
+  'price_change_6m': '6-Month Price Change',
+  'price_change_12m': '12-Month Price Change',
   'datetime': 'Time'
 };
 
 const numericalColumns = [
   'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'williams_r_rank', 'williams_r_ema_rank',
-  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank'
+  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m'
 ];
 
 const filterColumns = [
@@ -65,6 +69,11 @@ const formatRank = (value) => {
   return Number(value).toFixed(0);
 };
 
+const formatPercentage = (value) => {
+  if (value === null || value === undefined) return 'N/A';
+  return `${(Number(value) * 100).toFixed(2)}%`;
+};
+
 const formatColumnValue = (column, value) => {
   switch (column) {
     case 'close':
@@ -83,6 +92,10 @@ const formatColumnValue = (column, value) => {
     case 'force_index_52_week_rank':
     case 'ema_rank':
       return formatRank(value);
+    case 'price_change_3m':
+    case 'price_change_6m':
+    case 'price_change_12m':
+      return formatPercentage(value);      
     default:
       return value;
   }
@@ -96,7 +109,8 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
   const [selectedDate, setSelectedDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
   const [alertStateFilters, setAlertStateFilters] = useState({
     williams_r_momentum_alert_state: [],
-    force_index_alert_state: []
+    force_index_alert_state: [],
+    anchored_obv_alert_state: []    
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
@@ -157,7 +171,8 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
     setFilters({});
     setAlertStateFilters({
       williams_r_momentum_alert_state: [],
-      force_index_alert_state: []
+      force_index_alert_state: [],
+      anchored_obv_alert_state: []          
     });
     setFilteredData(cryptoData);
   };
@@ -269,7 +284,7 @@ function CryptoBTCApp({ drawerOpen, toggleDrawer }) {
             </Grid>
           </ListItem>
         ))}
-        {['williams_r_momentum_alert_state', 'force_index_alert_state'].map((column) => (
+        {['williams_r_momentum_alert_state', 'force_index_alert_state', 'anchored_obv_alert_state'].map((column) => (
           <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
               {columnMap[column]}

@@ -7,7 +7,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from us_stock_get_data_functions import fetch_stock_list_twelve_data, fetch_stock_statistics_twelve_data, fetch_technical_indicators_twelve_data, fetch_williams_r_twelve_data, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data
+from us_stock_get_data_functions import fetch_stock_list_twelve_data, fetch_stock_statistics_twelve_data, fetch_technical_indicators_twelve_data, fetch_williams_r_twelve_data, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data, fetch_obv_data, store_obv_data
 from us_stock_data_transformer_new import get_transformer
 import json  # Import json for pretty printing
 import time
@@ -53,10 +53,18 @@ def process_stock(stock, end_date):
         else:
             print(f"Skipping Force Index for {symbol} due to insufficient data or other criteria not met")
 
-        if is_empty_or_none(williams_r_data) and is_empty_or_none(force_index_data):
-            print(f"No data processed for {symbol} due to insufficient data or other criteria not met")
+        obv_data = fetch_obv_data(symbol, db_params, end_date)
+        if not is_empty_or_none(obv_data):
+            obv_transformed_data = obv_transformer.transform(obv_data, symbol)
+            store_obv_data(obv_transformed_data, symbol)
+            print(f"OBV data for {symbol} has been processed and stored")
         else:
-            print(f"Data for {symbol} has been stored in TimescaleDB")
+            print(f"Skipping OBV for {symbol} due to insufficient data or other criteria not met")
+
+        if (is_empty_or_none(williams_r_data) and 
+            is_empty_or_none(force_index_data) and 
+            is_empty_or_none(obv_data)):
+            print(f"No data processed for {symbol} due to insufficient data or other criteria not met")
 
     except Exception as e:
         print(f"Error processing {symbol}: {str(e)}")
@@ -77,16 +85,17 @@ def main():
     # Subtract those days to get to the most recent Sunday
     end_date = current - timedelta(days=days_since_sunday)
     # end_date = current - timedelta(days=1)
-    dates_to_process = [end_date - timedelta(weeks=i) for i in range(10)]
+    dates_to_process = [end_date - timedelta(weeks=i) for i in range(1)]
     dates_to_process.reverse()
     # print(f'{dates_to_process}')
     # # Limit to first 3 stocks
     # stocks = stocks[:1]
 
       # Get the appropriate transformers
-    global williams_r_transformer, force_index_transformer
+    global williams_r_transformer, force_index_transformer, obv_transformer
     williams_r_transformer = get_transformer('williams_r', db_params)
     force_index_transformer = get_transformer('force_index', db_params)
+    obv_transformer = get_transformer('anchored_obv', db_params)
 
     for end_date in dates_to_process:
         print(f"\n{'='*40}")

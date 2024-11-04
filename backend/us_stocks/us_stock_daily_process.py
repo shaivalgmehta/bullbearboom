@@ -13,6 +13,7 @@ from get_us_stock_data import run_stock_data_process
 import json  # Import json for pretty printing
 import time
 import pytz
+from typing import Dict, Any, List
 
 
 # Load environment variables
@@ -29,6 +30,60 @@ db_params = {
 
 TWELVE_DATA_API_KEY = os.getenv('TWELVE_DATA_API_KEY')
 
+######################### FUNCTION TO CALCULATE PRICE CHANGE #######################
+
+def fetch_price_changes(symbol: str, current_date: datetime, db_params: Dict[str, Any]) -> Dict[str, float]:
+    """
+    Calculate 3-month, 6-month, and 12-month price changes for a given stock
+    """
+    try:
+        conn = psycopg2.connect(**db_params)
+        with conn.cursor() as cur:
+            # Get current price
+            cur.execute("""
+                SELECT close
+                FROM us_daily_table
+                WHERE stock = %s AND DATE(datetime) = DATE(%s)
+            """, (symbol, current_date))
+            result = cur.fetchone()
+            if not result:
+                return {}
+            current_price = float(result[0])
+
+            # Get historical prices (3, 6, and 12 months ago)
+            intervals = {
+                'price_change_3m': 3,
+                'price_change_6m': 6,
+                'price_change_12m': 12
+            }
+            
+            price_changes = {}
+            for change_type, months in intervals.items():
+                cur.execute("""
+                    SELECT close
+                    FROM us_daily_table
+                    WHERE stock = %s 
+                    AND datetime <= %s - INTERVAL '%s months'
+                    ORDER BY datetime DESC
+                    LIMIT 1
+                """, (symbol, current_date, months))
+                
+                result = cur.fetchone()
+                if result and result[0] != 0:
+                    historical_price = float(result[0])
+                    price_change = ((current_price - historical_price) / historical_price)
+                    price_changes[change_type] = price_change
+                else:
+                    price_changes[change_type] = None
+        return price_changes
+
+    except Exception as e:
+        print(f"Error calculating price changes for {symbol}: {str(e)}")
+        return {}
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 
 ######################### FUNCTIONS TO PREPARE THE DATA ############################# 
 
@@ -44,6 +99,9 @@ def process_stock(stock, end_date):
             symbol, db_params, TWELVE_DATA_API_KEY, store_stock_daily_data, end_date
         )
 
+        # Calculate price changes
+        price_changes = fetch_price_changes(symbol, end_date, db_params)
+
         # Log if technical data is missing but continue processing
         if technical_indicator is None:
             print(f"Warning: No technical data available for {symbol}, proceeding with available data")
@@ -52,7 +110,8 @@ def process_stock(stock, end_date):
         combined_data = {
             'stock_data': stock,
             'statistics': statistics,
-            'technical_indicator': technical_indicator if technical_indicator is not None else []
+            'technical_indicator': technical_indicator if technical_indicator is not None else [],
+            'price_changes': price_changes
         }
 
         # Transform the data for daily table

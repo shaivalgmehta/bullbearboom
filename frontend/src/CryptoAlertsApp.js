@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { CircularProgress } from '@mui/material';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, List, ListItem,
-  Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup, FormControlLabel,
-  Tooltip, Select, MenuItem, OutlinedInput, TableContainer
+  Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup,
+  Tooltip, Select, MenuItem, OutlinedInput, TableContainer, Tabs, Tab,
+  CircularProgress
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -17,31 +14,21 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const columnMap = {
-  'stock': 'Stock Symbol',
-  'stock_name': 'Stock Name',
+  'stock': 'Symbol',
+  'crypto_name': 'Name',
   'alert': 'Alert Type',
   'datetime': 'Date & Time'
 };
 
-const numericalColumns = [
-];
-
-const filterColumns = [
-  'stock', 'stock_name'
-];
-
-const alertStateOptions = ['Oversold'];
-
+const filterColumns = ['stock', 'crypto_name'];
 const drawerWidth = 300;
 
-function AlertsApp({ drawerOpen, toggleDrawer }) {
+function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
   const [alertsData, setAlertsData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const [alertTypeFilters, setAlertTypeFilters] = useState({
-    alert: []
-  });
+  const [selectedBase, setSelectedBase] = useState('usd');
   const [sortConfig, setSortConfig] = useState({ key: 'datetime', direction: 'descending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const theme = useTheme();
@@ -51,7 +38,10 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const result = await axios.get(`${API_URL}/stocks/alerts`);
+        const endpoint = selectedBase === 'usd' 
+          ? 'alerts' 
+          : `alerts_${selectedBase}`;
+        const result = await axios.get(`${API_URL}/crypto/${endpoint}`);
         setAlertsData(result.data);
         setFilteredData(result.data);
       } catch (error) {
@@ -62,40 +52,22 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
     };
 
     fetchData();
-  }, []);
+  }, [selectedBase]);
 
-  const handleFilterChange = (column, value, type) => {
+  const handleFilterChange = (column, value) => {
     setFilters(prevFilters => ({
       ...prevFilters,
-      [column]: { ...prevFilters[column], [type]: value }
-    }));
-  };
-
-  const handleAlertTypeFilterChange = (column, value) => {
-    setAlertTypeFilters(prevFilters => ({
-      ...prevFilters,
-      [column]: prevFilters[column].includes(value)
-        ? prevFilters[column].filter(v => v !== value)
-        : [...prevFilters[column], value]
+      [column]: value.toLowerCase()
     }));
   };
 
   const applyFilters = () => {
     const filtered = alertsData.filter(alert => {
-      // Text-based filters for stock and stock_name
-      const matchesTextFilters = Object.entries(filters).every(([column, { min, max }]) => {
-        if (!min && !max) return true;
-        const value = alert[column].toLowerCase();
-        if (min) return value.includes(min.toLowerCase());
-        return true;
+      return Object.entries(filters).every(([column, value]) => {
+        if (!value) return true;
+        const alertValue = String(alert[column]).toLowerCase();
+        return alertValue.includes(value);
       });
-
-      // Alert type filters
-      const matchesAlertTypes = Object.entries(alertTypeFilters).every(([column, selectedTypes]) => {
-        return selectedTypes.length === 0 || selectedTypes.includes(alert[column]);
-      });
-
-      return matchesTextFilters && matchesAlertTypes;
     });
     setFilteredData(filtered);
     if (isMobile) toggleDrawer();
@@ -103,9 +75,6 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
 
   const clearFilters = () => {
     setFilters({});
-    setAlertTypeFilters({
-      alert: []
-    });
     setFilteredData(alertsData);
   };
 
@@ -118,12 +87,8 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
   };
 
   const handleColumnVisibilityChange = (event) => {
-    const {
-      target: { value },
-    } = event;
-    setHiddenColumns(
-      typeof value === 'string' ? value.split(',') : value,
-    );
+    const { value } = event.target;
+    setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
   };
 
   const visibleColumns = Object.keys(columnMap).filter(column => !hiddenColumns.includes(column));
@@ -132,10 +97,12 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
     let sortableItems = [...filteredData];
     if (sortConfig.key !== null) {
       sortableItems.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
+        if (aValue > bValue) {
           return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
@@ -143,6 +110,13 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
     }
     return sortableItems;
   }, [filteredData, sortConfig]);
+
+  const formatValue = (column, value) => {
+    if (column === 'datetime') {
+      return new Date(value).toLocaleString();
+    }
+    return value;
+  };
 
   const drawer = (
     <Box sx={{ p: 2 }}>
@@ -156,6 +130,21 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
       </Box>
       <Divider />
       <List>
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            Base Currency
+          </Typography>
+          <Tabs
+            value={selectedBase}
+            onChange={(_, newValue) => setSelectedBase(newValue)}
+            aria-label="base currency tabs"
+            variant="fullWidth"
+          >
+            <Tab label="USD" value="usd" />
+            <Tab label="ETH" value="eth" />
+            <Tab label="BTC" value="btc" />
+          </Tabs>
+        </ListItem>
         <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
             Hide Columns
@@ -185,30 +174,11 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
               fullWidth
               size="small"
               placeholder={`Filter ${columnMap[column]}`}
-              onChange={(e) => handleFilterChange(column, e.target.value, 'min')}
-              value={filters[column]?.min || ''}
+              onChange={(e) => handleFilterChange(column, e.target.value)}
+              value={filters[column] || ''}
             />
           </ListItem>
         ))}
-        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Alert Types
-          </Typography>
-          <FormGroup>
-            {alertStateOptions.map((option) => (
-              <FormControlLabel
-                key={option}
-                control={
-                  <Checkbox
-                    checked={alertTypeFilters.alert.includes(option)}
-                    onChange={() => handleAlertTypeFilterChange('alert', option)}
-                  />
-                }
-                label={option}
-              />
-            ))}
-          </FormGroup>
-        </ListItem>
       </List>
       <Box sx={{ mt: 2 }}>
         <Button variant="contained" fullWidth onClick={applyFilters} sx={{ mb: 1 }}>
@@ -220,13 +190,6 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
       </Box>
     </Box>
   );
-
-  const formatValue = (column, value) => {
-    if (column === 'datetime') {
-      return new Date(value).toLocaleString();
-    }
-    return value;
-  };
 
   return (
     <Box sx={{ 
@@ -287,17 +250,16 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
                   {visibleColumns.map((key) => (
                     <TableCell 
                       key={key}
-                      align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
+                      align={key === 'stock' || key === 'crypto_name' ? "left" : "center"}
                       sx={{ 
                         whiteSpace: 'nowrap', 
                         padding: '8px 12px',
                         fontSize: '0.9rem',
                         fontWeight: 'bold',
-                        backgroundColor: '#f8f9fa',
-                        ...(key === 'stock_name' && { width: '200px' })
+                        backgroundColor: '#f8f9fa'
                       }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'crypto_name' ? "flex-start" : "center" }}>
                         {columnMap[key]}
                         <Button size="small" onClick={() => requestSort(key)}>
                           {sortConfig.key === key ? (
@@ -321,19 +283,14 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
                     {visibleColumns.map((column) => (
                       <TableCell 
                         key={column}
-                        align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
+                        align={column === 'stock' || column === 'crypto_name' ? "left" : "center"}
                         sx={{ 
                           whiteSpace: 'nowrap', 
                           padding: '8px 12px',
-                          fontSize: '0.85rem',
-                          ...(column === 'stock_name' && {
-                            maxWidth: '200px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          })
+                          fontSize: '0.85rem'
                         }}
                       >
-                        {column === 'stock_name' ? (
+                        {column === 'crypto_name' ? (
                           <Tooltip title={alert[column]} placement="top">
                             <span>{formatValue(column, alert[column])}</span>
                           </Tooltip>
@@ -353,4 +310,4 @@ function AlertsApp({ drawerOpen, toggleDrawer }) {
   );
 }
 
-export default AlertsApp;
+export default CryptoAlertsApp;

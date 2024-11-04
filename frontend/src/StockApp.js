@@ -40,10 +40,14 @@ const columnMap = {
   'force_index_7_week': '7-Week Force Index',
   'force_index_52_week': '52-Week Force Index',
   'force_index_alert_state': 'Force Index Alert',
+  'anchored_obv_alert_state': 'Anchored OBV Alert',
   'pe_ratio_rank': 'P/E Ratio Ranking',
   'ev_ebitda_rank': 'EV/EBITDA Ranking',
   'pb_ratio_rank': 'P/B Ratio Ranking',
   'peg_ratio_rank': 'PEG Ratio Ranking',
+  'price_change_3m': '3-Month Price Change',
+  'price_change_6m': '6-Month Price Change',
+  'price_change_12m': '12-Month Price Change',
   'datetime': 'Time'
 };
 
@@ -51,7 +55,7 @@ const numericalColumns = [
   'market_cap', 'close', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
   'peg_ratio', 'current_quarter_sales', 'last_quarter_sales', 'current_quarter_ebitda', 'last_quarter_ebitda', 'ema',
   'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'pe_ratio_rank', 'ev_ebitda_rank',
-  'pb_ratio_rank', 'peg_ratio_rank'
+  'pb_ratio_rank', 'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m'
 ];
 
 const filterColumns = [
@@ -106,6 +110,9 @@ const formatColumnValue = (column, value) => {
       return formatRatio(value);
     case 'sales_change_percent':
     case 'ebitda_change_percent':
+    case 'price_change_3m':
+    case 'price_change_6m':
+    case 'price_change_12m':
       return formatPercentage(value);
     case 'pe_ratio_rank':
     case 'ev_ebitda_rank':
@@ -127,7 +134,8 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   const [selectedDate, setSelectedDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
   const [alertStateFilters, setAlertStateFilters] = useState({
     williams_r_momentum_alert_state: [],
-    force_index_alert_state: []
+    force_index_alert_state: [],
+    anchored_obv_alert_state: []
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
@@ -188,7 +196,8 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     setFilters({});
     setAlertStateFilters({
       williams_r_momentum_alert_state: [],
-      force_index_alert_state: []
+      force_index_alert_state: [],
+      anchored_obv_alert_state: []          
     });
     setFilteredData(stockData);
   };
@@ -300,7 +309,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
             </Grid>
           </ListItem>
         ))}
-        {['williams_r_momentum_alert_state', 'force_index_alert_state'].map((column) => (
+        {['williams_r_momentum_alert_state', 'force_index_alert_state', 'anchored_obv_alert_state'].map((column) => (
           <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
               {columnMap[column]}

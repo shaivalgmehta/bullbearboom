@@ -3,6 +3,8 @@ from typing import Dict, Any, List
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
+from datetime import datetime, timedelta
+
 
 class BaseTransformer(ABC):
     @abstractmethod
@@ -48,6 +50,7 @@ class CoreDataTransformer(BaseTransformer):
         try:
             stock_data = data['stock_data']
             technical_indicator = data['technical_indicator']
+            price_changes = data.get('price_changes', {})
 
             # close_price = technical_indicator['close']
             # volume = technical_indicator['volume']
@@ -63,7 +66,10 @@ class CoreDataTransformer(BaseTransformer):
                 'close': self._parse_numeric(technical_indicator['close']),
                 'volume': self._parse_numeric(technical_indicator['volume']),
                 'high': self._parse_numeric(technical_indicator['high']),
-                'low': self._parse_numeric(technical_indicator['low'])
+                'low': self._parse_numeric(technical_indicator['low']),
+                'price_change_3m': self._parse_numeric(price_changes.get('price_change_3m')),
+                'price_change_6m': self._parse_numeric(price_changes.get('price_change_6m')),
+                'price_change_12m': self._parse_numeric(price_changes.get('price_change_12m'))
             }
             return [transformed_data]
         except KeyError as e:
@@ -312,397 +318,162 @@ class ForceIndexTransformer(BaseTransformer):
             return '-'
 
 
-#################################### BASE ETH TRANSFORMERS ##################################################
+############################## ANCHOR OBV CALCULATIONS #############################################################
 
-class CoreDataTransformerETH(BaseTransformer):
-    def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        try:
-            stock_data = data['stock_data']
-            technical_indicator = data['technical_indicator']
-   
-            transformed_data = {
-                'datetime': technical_indicator['datetime'],
-                'stock': stock_data['symbol'],
-                'stock_name': stock_data['name'],
-                'crypto_name': stock_data['crypto_name'],
-                'ema': self._parse_numeric(technical_indicator['ema']),
-                'open': self._parse_numeric(technical_indicator['open']),
-                'close': self._parse_numeric(technical_indicator['close']),
-                'high': self._parse_numeric(technical_indicator['high']),
-                'low': self._parse_numeric(technical_indicator['low']),
-                'volume': self._parse_numeric(technical_indicator['volume'])
-            }
-            return [transformed_data]
-        except KeyError as e:
-            print(f"Error in CoreDataTransformer: Missing key {str(e)}")
-            return []
-        except Exception as e:
-            print(f"Error in CoreDataTransformer: {str(e)}")
-            return []
-
-    def _parse_numeric(self, value: Any) -> float:
-        if isinstance(value, (int, float)):
-            return float(value)
-        elif isinstance(value, str):
-            try:
-                return float(value.replace(',', ''))
-            except ValueError:
-                return None
-        else:
-            return None
-
-class WilliamsRTransformerETH(BaseTransformer):
+class AnchoredOBVTransformer(BaseTransformer):
     def __init__(self, db_connection_params):
         self.db_connection_params = db_connection_params
+        self.base = 'usd'  # Default base
 
-    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
+    def transform(self, data: List[Dict[str, Any]], symbol: str, base: str = 'usd') -> Dict[str, Any]:
+        self.base = base.lower()
+        
         try:
             df = pd.DataFrame(data)
             df['datetime'] = pd.to_datetime(df['t'])
             df = df.sort_values('datetime')
             
-            # Ensure we have at least 21 weeks of data
-            if len(df) < 21:
-                raise ValueError(f"Insufficient data for {symbol}. Need at least 21 weeks, got {len(df)}.")
-            
-            # Use only the last 21 weeks of data and create a copy
-            df_last_21 = df.tail(21).copy()
-            
-            # Calculate the 21-week EMA of Williams %R
-            df_last_21['willr_ema'] = df_last_21['willr'].ewm(span=21, adjust=False).mean()
-            
-            # Get the latest values
-            latest_williams_r = float(df_last_21['willr'].iloc[-1])
-            latest_datetime = df_last_21['datetime'].iloc[-1]
-            latest_ema = float(df_last_21['willr_ema'].iloc[-1])
-            latest_eth_price = float(df_last_21['eth_price'].iloc[-1])
-
-            prev_alert_state = self._get_previous_alert_state(symbol)
-            
-            williams_r_momentum_alert_state = self._determine_alert_state(latest_williams_r, latest_ema, prev_alert_state)
-            
-            return {
-                'datetime': latest_datetime,
-                'williams_r': latest_williams_r,
-                'williams_r_ema': latest_ema,
-                'williams_r_momentum_alert_state': williams_r_momentum_alert_state
-            }
-        except Exception as e:
-            print(f"Error in WilliamsRTransformer for {symbol}: {str(e)}")
-            return {
-                'datetime': None,
-                'williams_r': None,
-                'williams_r_ema': None,
-                'williams_r_momentum_alert_state': None
-            }
-            
-    def _get_previous_alert_state(self, symbol):
-        conn = psycopg2.connect(**self.db_connection_params)
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT williams_r_momentum_alert_state 
-            FROM crypto_weekly_table_eth
-            WHERE stock = %s 
-            ORDER BY datetime DESC 
-            LIMIT 1
-        """, (symbol,))
-        
-        result = cur.fetchone()
-        
-        cur.close()
-        conn.close()
-        
-        return result[0] if result else None
-
-    def _determine_alert_state(self, williams_r, ema, prev_state):
-        if williams_r is None or ema is None:
-            return '-'
-        
-        meets_criteria = williams_r > ema and williams_r > -80
-        
-        if prev_state is None:
-            return '$$$' if meets_criteria else '-'
-        elif prev_state == '$$$':
-            return '$' if meets_criteria else '-'
-        elif prev_state == '$':
-            return '$' if meets_criteria else '-'
-        else:  # prev_state == '-'
-            return '$$$' if meets_criteria else '-'
-
-class ForceIndexTransformerETH(BaseTransformer):
-    def __init__(self, db_connection_params):
-        self.db_connection_params = db_connection_params
-
-    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
-        try:
-            df = pd.DataFrame(data)
-            df['datetime'] = pd.to_datetime(df['t'])
-            df = df.sort_values('datetime')
-
+            if df.empty:
+                raise ValueError(f"No data available for {symbol}")
+                
             latest_datetime = df['datetime'].iloc[-1]
+            anchor_date = self._get_anchor_date(latest_datetime)
+            
+            # Calculate OBV
+            current_obv = self._calculate_obv(df, anchor_date)   
 
-            force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
-            force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
-            
-            last_week_force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-2])
-            last_week_force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-2])
-            
-            latest_eth_price = float(df['eth_price'].iloc[-1])
-            latest_close_eth = float(df['c_eth'].iloc[-1])
-            latest_volume_eth = float(df['v_eth'].iloc[-1])
-            
-            prev_alert_state = self._get_previous_alert_state(symbol)
-            force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 
-                                                      last_week_force_index_7_week, last_week_force_index_52_week, 
-                                                      prev_alert_state)
+            # Calculate confidence
+            confidence = self._calculate_confidence(df, anchor_date)
+
+            # Get previous values
+            prev_values = self._get_previous_values(symbol, latest_datetime)
+            prev_obv = prev_values.get('anchored_obv') if prev_values else None
+
+            # Determine alert state
+            alert_state = self._determine_alert_state(current_obv, prev_obv)
             
             return {
                 'datetime': latest_datetime,
-                'force_index_7_week': force_index_7_week,
-                'force_index_52_week': force_index_52_week,
-                'last_week_force_index_7_week': last_week_force_index_7_week,
-                'last_week_force_index_52_week': last_week_force_index_52_week,
-                'force_index_alert_state': force_index_alert_state
+                'anchored_obv': current_obv,
+                'anchor_date': anchor_date,
+                'obv_confidence': confidence,
+                'anchored_obv_alert_state': alert_state
             }
+            
         except Exception as e:
-            print(f"Error in ForceIndexTransformer for {symbol}: {str(e)}")
+            print(f"Error in AnchoredOBVTransformer for {symbol}/{self.base}: {str(e)}")
             return {
                 'datetime': None,
-                'force_index_7_week': None,
-                'force_index_52_week': None,
-                'last_week_force_index_7_week': None,
-                'last_week_force_index_52_week': None,
-                'force_index_alert_state': None
+                'anchored_obv': None,
+                'anchor_date': None,
+                'obv_confidence': None,
+                'anchored_obv_alert_state': None
             }
 
-    def _get_previous_alert_state(self, symbol):
+    def _get_anchor_date(self, current_date: datetime) -> datetime:
+        """Get the start of the current quarter"""
+        month = current_date.month
+        quarter_start_month = ((month - 1) // 3) * 3 + 1
+        
+        return datetime(
+            current_date.year, 
+            quarter_start_month, 
+            1, 
+            tzinfo=current_date.tzinfo
+        )
+
+    def _calculate_obv(self, df: pd.DataFrame, anchor_date: datetime) -> float:
+        """Calculate OBV from anchor date"""
+        # Filter data from anchor date
+        df = df[df['datetime'] >= anchor_date].copy()
+        
+        if len(df) < 2:
+            return 0
+        
+        # Initialize OBV with explicit dtype
+        df['obv'] = pd.Series(0, index=df.index, dtype='float64')
+        
+        # Use appropriate close price column based on base
+        close_col = 'c' if self.base == 'usd' else f'c_{self.base}'
+        volume_col = 'v' if self.base == 'usd' else f'v_{self.base}'
+        
+        # Calculate daily price changes
+        df['price_change'] = df[close_col].astype('float64').diff()
+        
+        # Calculate OBV
+        for i in range(1, len(df)):
+            prev_obv = float(df['obv'].iloc[i-1])
+            curr_volume = float(df[volume_col].iloc[i])
+            
+            if df['price_change'].iloc[i] > 0:
+                df.loc[df.index[i], 'obv'] = prev_obv + curr_volume
+            elif df['price_change'].iloc[i] < 0:
+                df.loc[df.index[i], 'obv'] = prev_obv - curr_volume
+            else:
+                df.loc[df.index[i], 'obv'] = prev_obv
+        return float(df['obv'].iloc[-1])
+
+    def _calculate_confidence(self, df: pd.DataFrame, anchor_date: datetime) -> float:
+        """Calculate confidence based on data completeness"""
+        # Get all dates from anchor to latest
+        date_range = pd.date_range(
+            start=anchor_date,
+            end=df['datetime'].max(),
+            freq='W'
+        )
+        
+        # Calculate the percentage of weeks we have data for
+        actual_weeks = df[df['datetime'] >= anchor_date]['datetime'].nunique()
+        expected_weeks = len(date_range)
+        
+        if expected_weeks == 0:
+            return 0
+            
+        return (actual_weeks / expected_weeks) * 100
+
+    def _get_previous_values(self, symbol: str, latest_datetime: datetime) -> Dict[str, Any]:
+        """Get previous OBV value for comparison"""
         conn = psycopg2.connect(**self.db_connection_params)
         cur = conn.cursor()
         
-        cur.execute("""
-            SELECT force_index_alert_state 
-            FROM crypto_weekly_table_eth 
-            WHERE stock = %s 
-            ORDER BY datetime DESC 
-            LIMIT 1
-        """, (symbol,))
+        table_name = f"crypto_weekly_table{'_' + self.base if self.base != 'usd' else ''}"
         
-        result = cur.fetchone()
-        
-        cur.close()
-        conn.close()
-        
-        return result[0] if result else None
-
-    def _determine_alert_state(self, fi_7_week, fi_52_week, last_fi_7_week, last_fi_52_week, prev_state):
-        upward_crossover = (last_fi_7_week <= last_fi_52_week) and (fi_7_week > fi_52_week)
-        downward_crossover = (last_fi_7_week >= last_fi_52_week) and (fi_7_week < fi_52_week)
-        
-        if upward_crossover or downward_crossover:
-            if prev_state in ['$$$', '$']:
-                return '$'
-            else:
-                return '$$$'
-        else:
-            return '-'
-
-#################################### BASE BTC TRANSFORMERS ##################################################
-
-class CoreDataTransformerBTC(BaseTransformer):
-    def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         try:
-            stock_data = data['stock_data']
-            technical_indicator = data['technical_indicator']
-   
-            transformed_data = {
-                'datetime': technical_indicator['datetime'],
-                'stock': stock_data['symbol'],
-                'stock_name': stock_data['name'],
-                'crypto_name': stock_data['crypto_name'],
-                'ema': self._parse_numeric(technical_indicator['ema']),
-                'open': self._parse_numeric(technical_indicator['open']),
-                'close': self._parse_numeric(technical_indicator['close']),
-                'high': self._parse_numeric(technical_indicator['high']),                
-                'low': self._parse_numeric(technical_indicator['low']),
-                'volume': self._parse_numeric(technical_indicator['volume'])
-            }
-            return [transformed_data]
-        except KeyError as e:
-            print(f"Error in CoreDataTransformer: Missing key {str(e)}")
-            return []
-        except Exception as e:
-            print(f"Error in CoreDataTransformer: {str(e)}")
-            return []
-
-    def _parse_numeric(self, value: Any) -> float:
-        if isinstance(value, (int, float)):
-            return float(value)
-        elif isinstance(value, str):
-            try:
-                return float(value.replace(',', ''))
-            except ValueError:
-                return None
-        else:
+            cur.execute(f"""
+                SELECT datetime, anchored_obv, anchor_date
+                FROM {table_name}
+                WHERE stock = %s 
+                  AND datetime < %s
+                  AND anchored_obv IS NOT NULL
+                ORDER BY datetime DESC
+                LIMIT 1
+            """, (symbol, latest_datetime))
+            
+            result = cur.fetchone()
+            
+            if result:
+                return {
+                    'datetime': result[0],
+                    'anchored_obv': result[1],
+                    'anchor_date': result[2]
+                }
             return None
+        finally:
+            cur.close()
+            conn.close()
 
-class WilliamsRTransformerBTC(BaseTransformer):
-    def __init__(self, db_connection_params):
-        self.db_connection_params = db_connection_params
-
-    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
-        try:
-            df = pd.DataFrame(data)
-            df['datetime'] = pd.to_datetime(df['t'])
-            df = df.sort_values('datetime')
-            
-            # Ensure we have at least 21 weeks of data
-            if len(df) < 21:
-                raise ValueError(f"Insufficient data for {symbol}. Need at least 21 weeks, got {len(df)}.")
-            
-            # Use only the last 21 weeks of data and create a copy
-            df_last_21 = df.tail(21).copy()
-            
-            # Calculate the 21-week EMA of Williams %R
-            df_last_21['willr_ema'] = df_last_21['willr'].ewm(span=21, adjust=False).mean()
-            
-            # Get the latest values
-            latest_williams_r = float(df_last_21['willr'].iloc[-1])
-            latest_datetime = df_last_21['datetime'].iloc[-1]
-            latest_ema = float(df_last_21['willr_ema'].iloc[-1])
-            latest_btc_price = float(df_last_21['btc_price'].iloc[-1])
-
-            prev_alert_state = self._get_previous_alert_state(symbol)
-            
-            williams_r_momentum_alert_state = self._determine_alert_state(latest_williams_r, latest_ema, prev_alert_state)
-            
-            return {
-                'datetime': latest_datetime,
-                'williams_r': latest_williams_r,
-                'williams_r_ema': latest_ema,
-                'williams_r_momentum_alert_state': williams_r_momentum_alert_state
-            }
-        except Exception as e:
-            print(f"Error in WilliamsRTransformer for {symbol}: {str(e)}")
-            return {
-                'datetime': None,
-                'williams_r': None,
-                'williams_r_ema': None,
-                'williams_r_momentum_alert_state': None
-            }
-            
-    def _get_previous_alert_state(self, symbol):
-        conn = psycopg2.connect(**self.db_connection_params)
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT williams_r_momentum_alert_state 
-            FROM crypto_weekly_table_btc
-            WHERE stock = %s 
-            ORDER BY datetime DESC 
-            LIMIT 1
-        """, (symbol,))
-        
-        result = cur.fetchone()
-        
-        cur.close()
-        conn.close()
-        
-        return result[0] if result else None
-
-    def _determine_alert_state(self, williams_r, ema, prev_state):
-        if williams_r is None or ema is None:
+    def _determine_alert_state(self, current_obv: float, prev_obv: float) -> str:
+        """Generate alert state based on OBV crossover"""
+        if current_obv is None or prev_obv is None:
             return '-'
-        
-        meets_criteria = williams_r > ema and williams_r > -80
-        
-        if prev_state is None:
-            return '$$$' if meets_criteria else '-'
-        elif prev_state == '$$$':
-            return '$' if meets_criteria else '-'
-        elif prev_state == '$':
-            return '$' if meets_criteria else '-'
-        else:  # prev_state == '-'
-            return '$$$' if meets_criteria else '-'
-
-class ForceIndexTransformerBTC(BaseTransformer):
-    def __init__(self, db_connection_params):
-        self.db_connection_params = db_connection_params
-
-    def transform(self, data: List[Dict[str, Any]], symbol: str) -> Dict[str, Any]:
-        try:
-            df = pd.DataFrame(data)
-            df['datetime'] = pd.to_datetime(df['t'])
-            df = df.sort_values('datetime')
-
-            latest_datetime = df['datetime'].iloc[-1]
-
-            force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-1])
-            force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-1])
             
-            last_week_force_index_7_week = float(df['force_index'].ewm(span=7, adjust=False).mean().iloc[-2])
-            last_week_force_index_52_week = float(df['force_index'].ewm(span=52, adjust=False).mean().iloc[-2])
-            
-            latest_btc_price = float(df['btc_price'].iloc[-1])
-            latest_close_btc = float(df['c_btc'].iloc[-1])
-            latest_volume_btc = float(df['v_btc'].iloc[-1])
-            
-            prev_alert_state = self._get_previous_alert_state(symbol)
-            force_index_alert_state = self._determine_alert_state(force_index_7_week, force_index_52_week, 
-                                                      last_week_force_index_7_week, last_week_force_index_52_week, 
-                                                      prev_alert_state)
-            
-            return {
-                'datetime': latest_datetime,
-                'force_index_7_week': force_index_7_week,
-                'force_index_52_week': force_index_52_week,
-                'last_week_force_index_7_week': last_week_force_index_7_week,
-                'last_week_force_index_52_week': last_week_force_index_52_week,
-                'force_index_alert_state': force_index_alert_state
-            }
-        except Exception as e:
-            print(f"Error in ForceIndexTransformer for {symbol}: {str(e)}")
-            return {
-                'datetime': None,
-                'force_index_7_week': None,
-                'force_index_52_week': None,
-                'last_week_force_index_7_week': None,
-                'last_week_force_index_52_week': None,
-                'force_index_alert_state': None
-            }
+        # Generate $$$ when crossing from negative to positive
+        if current_obv > 0 and prev_obv <= 0:
+            return '$$$'
+        
+        return '-'
 
-    def _get_previous_alert_state(self, symbol):
-        conn = psycopg2.connect(**self.db_connection_params)
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT force_index_alert_state 
-            FROM crypto_weekly_table_btc 
-            WHERE stock = %s 
-            ORDER BY datetime DESC 
-            LIMIT 1
-        """, (symbol,))
-        
-        result = cur.fetchone()
-        
-        cur.close()
-        conn.close()
-        
-        return result[0] if result else None
-
-    def _determine_alert_state(self, fi_7_week, fi_52_week, last_fi_7_week, last_fi_52_week, prev_state):
-        upward_crossover = (last_fi_7_week <= last_fi_52_week) and (fi_7_week > fi_52_week)
-        downward_crossover = (last_fi_7_week >= last_fi_52_week) and (fi_7_week < fi_52_week)
-        
-        if upward_crossover or downward_crossover:
-            if prev_state in ['$$$', '$']:
-                return '$'
-            else:
-                return '$$$'
-        else:
-            return '-'
-
-##################################################################################
+######################################################################################
 
 def get_transformer(source: str, db_params=None) -> BaseTransformer:
     if source.lower() == 'core_data':
@@ -713,17 +484,7 @@ def get_transformer(source: str, db_params=None) -> BaseTransformer:
         return WilliamsRTransformer(db_params)
     elif source.lower() == 'force_index':
         return ForceIndexTransformer(db_params)
-    elif source.lower() == 'core_data_eth':
-        return CoreDataTransformerETH()
-    elif source.lower() == 'williams_r_eth':
-        return WilliamsRTransformerETH(db_params)
-    elif source.lower() == 'force_index_eth':
-        return ForceIndexTransformerETH(db_params)
-    elif source.lower() == 'core_data_btc':
-        return CoreDataTransformerBTC()
-    elif source.lower() == 'williams_r_btc':
-        return WilliamsRTransformerBTC(db_params)
-    elif source.lower() == 'force_index_btc':
-        return ForceIndexTransformerBTC(db_params)
+    elif source.lower() == 'anchored_obv':
+        return AnchoredOBVTransformer(db_params)
     else:
         raise ValueError(f"Unsupported data source: {source}")

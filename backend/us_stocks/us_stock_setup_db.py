@@ -60,6 +60,9 @@ def setup_database():
                 ev_ebitda_rank INTEGER,
                 pb_ratio_rank INTEGER,
                 peg_ratio_rank INTEGER,
+                price_change_3m NUMERIC,
+                price_change_6m NUMERIC,
+                price_change_12m NUMERIC,                
                 CONSTRAINT us_screener_pkey PRIMARY KEY (datetime, stock)
 
             """)
@@ -93,6 +96,9 @@ def setup_database():
                 ev_ebitda_rank INTEGER,
                 pb_ratio_rank INTEGER,
                 peg_ratio_rank INTEGER,
+                price_change_3m NUMERIC,
+                price_change_6m NUMERIC,
+                price_change_12m NUMERIC,                 
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT us_daily_pkey PRIMARY KEY (datetime, stock)
             """)
@@ -110,6 +116,10 @@ def setup_database():
                 last_week_force_index_7_week NUMERIC,
                 last_week_force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,
+                anchored_obv NUMERIC,
+                anchored_obv_alert_state TEXT,
+                anchor_date TIMESTAMPTZ,
+                obv_confidence NUMERIC,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT us_weekly_pkey PRIMARY KEY (datetime, stock)
             """)

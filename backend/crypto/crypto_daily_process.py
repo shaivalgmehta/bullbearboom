@@ -16,6 +16,7 @@ import json
 import time
 import pytz
 import pandas as pd
+from typing import Dict, Any, List
 
 
 # Load environment variables
@@ -33,21 +34,87 @@ db_params = {
 # Polygon.io API key
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
 
+
+######################### FUNCTION TO CALCULATE PRICE CHANGE #######################
+
+def fetch_price_changes(symbol: str, current_date: datetime, current_price: float, db_params: Dict[str, Any], base: str = 'usd') -> Dict[str, float]:
+    """
+    Calculate 3-month, 6-month, and 12-month price changes for a given crypto
+    Args:
+        symbol: Crypto symbol
+        current_date: Date for current price
+        current_price: Current closing price from API response
+        db_params: Database connection parameters
+        base: Base currency (usd, eth, btc)
+    """
+    try:
+        conn = psycopg2.connect(**db_params)
+        with conn.cursor() as cur:
+            # Get table name based on base currency
+            table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+            
+            # Get historical prices (3, 6, and 12 months ago)
+            intervals = {
+                'price_change_3m': 3,
+                'price_change_6m': 6,
+                'price_change_12m': 12
+            }
+            
+            price_changes = {}
+            
+            for change_type, months in intervals.items():
+                cur.execute(f"""
+                    SELECT close
+                    FROM {table_name}
+                    WHERE stock = %s 
+                    AND datetime <= %s - INTERVAL '%s months'
+                    ORDER BY datetime DESC
+                    LIMIT 1
+                """, (symbol, current_date, months))
+                
+                result = cur.fetchone()
+                if result and result[0] != 0:
+                    historical_price = float(result[0])
+                    price_change = ((current_price - historical_price) / historical_price)
+                    price_changes[change_type] = price_change
+                else:
+                    price_changes[change_type] = None
+
+        return price_changes
+
+    except Exception as e:
+        print(f"Error calculating price changes for {symbol}/{base}: {str(e)}")
+        return {}
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+######################### FUNCTIONS TO PREPARE THE DATA #############################           
+
 def process_stock(stock, base, end_date):
     symbol = stock['symbol']
     try:
         # Fetch technical indicators
-        technical_indicator = fetch_technical_indicators_polygon(symbol, db_params, POLYGON_API_KEY, store_stock_daily_data, end_date, base)
+        technical_indicator = fetch_technical_indicators_polygon(
+            symbol, db_params, POLYGON_API_KEY, store_stock_daily_data, end_date, base
+        )
         
         # If technical_indicator is None, end the process for this symbol
         if technical_indicator is None:
             print(f"Skipping {symbol}/{base} due to insufficient data or other criteria not met.")
             return  # This will end the function and move to the next symbol
         
+        # Get current price from technical indicator data
+        current_price = float(technical_indicator['close'])
+        
+        # Calculate price changes using the current price
+        price_changes = fetch_price_changes(symbol, end_date, current_price, db_params, base)
+        
         # Combine data for daily table
         combined_data = {
             'stock_data': stock,
-            'technical_indicator': technical_indicator
+            'technical_indicator': technical_indicator,
+            'price_changes': price_changes
         }
         
         # Transform the data for daily table
@@ -98,7 +165,6 @@ def calculate_and_rank_ema_metric_for_base(conn, base, end_date):
     
     # Calculate rankings (higher values ranked better)
     df['ema_rank'] = df['ema_metric'].rank(method='min', ascending=False)
-    print(f"{df['ema_rank']}")
 
     # Update the table with the rankings
     with conn.cursor() as cur:

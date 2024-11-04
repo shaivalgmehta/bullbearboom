@@ -475,12 +475,15 @@ def store_stock_data(data, base: str = 'USD'):
         data['volume'],
         data['high'],
         data['low'],
+        data['price_change_3m'],
+        data['price_change_6m'],
+        data['price_change_12m'],
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, f"""
         INSERT INTO {table_name} (
-            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, last_modified_date
+            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, price_change_3m, price_change_6m, price_change_12m, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -491,6 +494,9 @@ def store_stock_data(data, base: str = 'USD'):
             volume = EXCLUDED.volume,
             high = EXCLUDED.high,
             low = EXCLUDED.low,
+            price_change_3m = EXCLUDED.price_change_3m,
+            price_change_6m = EXCLUDED.price_change_6m,
+            price_change_12m = EXCLUDED.price_change_12m,            
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 
@@ -533,6 +539,136 @@ def store_stock_daily_data(data_list):
             volume = EXCLUDED.volume,
             high = EXCLUDED.high,
             low = EXCLUDED.low,
+            last_modified_date = EXCLUDED.last_modified_date
+    """, values)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+############# ANCHOR OBV DATABASE FUNCTIONS #######################################
+def fetch_obv_data(symbol: str, db_params: Dict[str, Any], end_date: datetime, base: str = 'usd') -> List[Dict[str, Any]]:
+    """
+    Fetch weekly price and volume data for OBV calculation
+    Makes sure to fetch from before the quarter start date to ensure we have enough data
+    """
+    end_date = end_date.astimezone(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get start of previous quarter to ensure we have enough data
+    month = end_date.month
+    quarter_start_month = ((month - 1) // 3) * 3 + 1
+    start_date = datetime(
+        end_date.year if month >= 4 else end_date.year - 1,
+        quarter_start_month if month >= 4 else 10,
+        1,
+        tzinfo=end_date.tzinfo
+    )
+
+    # Get appropriate table name based on base currency
+    table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            # Adjust the query based on base currency
+            if base.lower() == 'usd':
+                price_col = 'close'
+                volume_col = 'volume'
+            else:
+                price_col = 'close'
+                volume_col = 'volume'
+
+            cur.execute(f"""
+                WITH RECURSIVE weeks AS (
+                    SELECT %s::timestamp as week_end
+                    UNION ALL
+                    SELECT (week_end - interval '7 days')::timestamp
+                    FROM weeks
+                    WHERE week_end - interval '7 days' >= %s
+                ),
+                weekly_data AS (
+                    SELECT 
+                        (SELECT min(w.week_end)
+                         FROM weeks w
+                         WHERE w.week_end >= t.datetime) as datetime,
+                        (array_agg({price_col} ORDER BY datetime DESC))[1] as close,
+                        SUM({volume_col}) as volume
+                    FROM {table_name} t
+                    WHERE stock = %s 
+                      AND datetime BETWEEN %s AND %s
+                    GROUP BY (SELECT min(w.week_end)
+                             FROM weeks w
+                             WHERE w.week_end >= t.datetime)
+                )
+                SELECT 
+                    datetime as t,
+                    close as c,
+                    volume as v
+                FROM weekly_data
+                WHERE datetime IS NOT NULL
+                ORDER BY datetime DESC
+            """, (end_date, start_date, symbol, start_date, end_date))
+            
+            weekly_data = cur.fetchall()
+          
+            if not weekly_data:
+                return None
+
+            # Add base-specific column names for non-USD bases
+            result = []
+            for row in weekly_data:
+                data_point = {
+                    't': row[0],
+                    'c': float(row[1]) if row[1] is not None else None,
+                    'v': float(row[2]) if row[2] is not None else None
+                }
+                
+                # Add base-specific columns for non-USD bases
+                if base.lower() != 'usd':
+                    data_point[f'c_{base.lower()}'] = data_point['c']
+                    data_point[f'v_{base.lower()}'] = data_point['v']
+                
+                result.append(data_point)
+
+            return result
+    finally:
+        conn.close()
+
+def store_obv_data(data: Dict[str, Any], symbol: str, base: str = 'usd'):
+    """
+    Store OBV calculation results in the appropriate table based on base currency
+    """
+    conn = psycopg2.connect(**db_params)
+    cur = conn.cursor()
+
+    # Determine the appropriate table based on base currency
+    table_name = f"crypto_weekly_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+
+    values = [(
+        data['datetime'],
+        symbol,
+        data['anchored_obv'],
+        data['anchor_date'],
+        data['obv_confidence'],
+        data['anchored_obv_alert_state'],
+        datetime.now(timezone.utc)
+    )]
+
+    execute_values(cur, f"""
+        INSERT INTO {table_name} (
+            datetime, 
+            stock, 
+            anchored_obv,
+            anchor_date,
+            obv_confidence,
+            anchored_obv_alert_state,
+            last_modified_date
+        ) VALUES %s
+        ON CONFLICT (datetime, stock) DO UPDATE SET
+            anchored_obv = EXCLUDED.anchored_obv,
+            anchor_date = EXCLUDED.anchor_date,
+            obv_confidence = EXCLUDED.obv_confidence,
+            anchored_obv_alert_state = EXCLUDED.anchored_obv_alert_state,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 

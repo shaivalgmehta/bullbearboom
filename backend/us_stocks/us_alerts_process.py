@@ -36,13 +36,12 @@ def process_oversold_alerts(date):
                 LEFT JOIN (
                     SELECT DISTINCT ON (stock) stock, stock_name
                     FROM us_daily_table
-                    WHERE DATE(datetime) = DATE(%s)
                     ORDER BY stock, datetime DESC
                 ) d ON w.stock = d.stock
                 WHERE DATE(w.datetime) = DATE(%s)
                 AND w.williams_r_momentum_alert_state = '$$$'
                 AND w.force_index_alert_state = '$$$'
-            """, (date, date,))
+            """, (date,))
             
             alerts = cur.fetchall()
             

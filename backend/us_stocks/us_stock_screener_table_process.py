@@ -53,7 +53,7 @@ def update_screener_table(selected_date=None):
                 WITH latest_weekly AS (
                     SELECT DISTINCT ON (stock)
                         stock, datetime, williams_r, williams_r_ema, williams_r_momentum_alert_state,
-                        force_index_7_week, force_index_52_week, force_index_alert_state
+                        force_index_7_week, force_index_52_week, force_index_alert_state, anchored_obv_alert_state
                     FROM us_weekly_table
                     WHERE datetime > %s
                     ORDER BY stock, datetime DESC
@@ -65,7 +65,8 @@ def update_screener_table(selected_date=None):
                     williams_r_momentum_alert_state = w.williams_r_momentum_alert_state,
                     force_index_7_week = w.force_index_7_week,
                     force_index_52_week = w.force_index_52_week,
-                    force_index_alert_state = w.force_index_alert_state
+                    force_index_alert_state = w.force_index_alert_state,
+                    anchored_obv_alert_state = w.anchored_obv_alert_state
                 FROM latest_weekly w
                 WHERE s.stock = w.stock
             """, (target_date - timedelta(days=13),))

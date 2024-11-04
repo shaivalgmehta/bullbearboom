@@ -221,5 +221,71 @@ def get_latest_crypto_btc_data():
         logging.error(f"Error fetching crypto data: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/crypto/alerts', methods=['GET'])
+def get_crypto_alerts():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get the last 7 days of alerts
+        cur.execute("""
+            SELECT datetime, stock, crypto_name, alert
+            FROM crypto_alerts_table
+            WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
+            ORDER BY datetime DESC
+        """)
+        
+        alerts = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return jsonify(alerts)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/alerts_eth', methods=['GET'])
+def get_crypto_alerts_eth():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get the last 7 days of ETH-based alerts
+        cur.execute("""
+            SELECT datetime, stock, crypto_name, alert
+            FROM crypto_alerts_table_eth
+            WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
+            ORDER BY datetime DESC
+        """)
+        
+        alerts = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return jsonify(alerts)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/alerts_btc', methods=['GET'])
+def get_crypto_alerts_btc():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get the last 7 days of BTC-based alerts
+        cur.execute("""
+            SELECT datetime, stock, crypto_name, alert
+            FROM crypto_alerts_table_btc
+            WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
+            ORDER BY datetime DESC
+        """)
+        
+        alerts = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return jsonify(alerts)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
