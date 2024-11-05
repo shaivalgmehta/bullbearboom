@@ -29,9 +29,10 @@ def process_oversold_alerts(date):
                 WHERE DATE(datetime) = DATE(%s)
             """, (date,))
             
-            # Find stocks where both alerts are triggered and join with daily table for stock name
+            # Find stocks where both alerts are triggered
+            # and get the OBV alert state
             cur.execute("""
-                SELECT w.datetime, w.stock, d.stock_name
+                SELECT w.datetime, w.stock, d.stock_name, w.anchored_obv_alert_state
                 FROM us_weekly_table w
                 LEFT JOIN (
                     SELECT DISTINCT ON (stock) stock, stock_name
@@ -50,11 +51,15 @@ def process_oversold_alerts(date):
                     alert[0],  # datetime
                     alert[1],  # stock
                     alert[2],  # stock name
-                    'Oversold'  # alert type
+                    '$$$',     # oversold_alert
+                    alert[3]   # anchored_obv_alert_state
                 ) for alert in alerts]
                 
                 execute_values(cur, """
-                    INSERT INTO us_alerts_table (datetime, stock, stock_name, alert)
+                    INSERT INTO us_alerts_table (
+                        datetime, stock, stock_name, 
+                        oversold_alert, anchored_obv_alert_state
+                    )
                     VALUES %s
                 """, values)
             

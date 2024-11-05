@@ -463,13 +463,24 @@ class AnchoredOBVTransformer(BaseTransformer):
             conn.close()
 
     def _determine_alert_state(self, current_obv: float, prev_obv: float) -> str:
-        """Generate alert state based on OBV crossover"""
+        """Generate alert state based on OBV crossover
+        
+        Returns:
+            str: Alert state
+                '$$$' - When OBV crosses from negative to positive
+                '-$$$' - When OBV crosses from positive to negative
+                '-' - No significant change
+        """
         if current_obv is None or prev_obv is None:
             return '-'
             
         # Generate $$$ when crossing from negative to positive
         if current_obv > 0 and prev_obv <= 0:
             return '$$$'
+        
+        # Generate -$$$ when crossing from positive to negative
+        if current_obv < 0 and prev_obv >= 0:
+            return '-$$$'
         
         return '-'
 

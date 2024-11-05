@@ -229,7 +229,7 @@ def get_crypto_alerts():
         
         # Get the last 7 days of alerts
         cur.execute("""
-            SELECT datetime, stock, crypto_name, alert
+            SELECT *
             FROM crypto_alerts_table
             WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
             ORDER BY datetime DESC
@@ -251,7 +251,7 @@ def get_crypto_alerts_eth():
         
         # Get the last 7 days of ETH-based alerts
         cur.execute("""
-            SELECT datetime, stock, crypto_name, alert
+            SELECT *
             FROM crypto_alerts_table_eth
             WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
             ORDER BY datetime DESC
@@ -273,7 +273,7 @@ def get_crypto_alerts_btc():
         
         # Get the last 7 days of BTC-based alerts
         cur.execute("""
-            SELECT datetime, stock, crypto_name, alert
+            SELECT *
             FROM crypto_alerts_table_btc
             WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
             ORDER BY datetime DESC

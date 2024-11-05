@@ -35,7 +35,7 @@ def process_alerts_for_base(base, date):
             
             # Find cryptos where both alerts are triggered and join with daily table for name
             cur.execute(f"""
-                SELECT w.datetime, w.stock, d.crypto_name
+                SELECT w.datetime, w.stock, d.crypto_name, w.anchored_obv_alert_state
                 FROM {weekly_table} w
                 LEFT JOIN (
                     SELECT DISTINCT ON (stock) stock, crypto_name
@@ -43,22 +43,25 @@ def process_alerts_for_base(base, date):
                     ORDER BY stock, datetime DESC
                 ) d ON w.stock = d.stock
                 WHERE DATE(w.datetime) = DATE(%s)
-                AND (
-                    (w.williams_r_momentum_alert_state = '$$$' AND w.force_index_alert_state = '$$$')
-                )
+                AND w.williams_r_momentum_alert_state = '$$$'
+                AND w.force_index_alert_state = '$$$'
             """, (date,))
+            
             alerts = cur.fetchall()
             if alerts:
                 values = [(
                     alert[0],  # datetime
                     alert[1],  # stock
                     alert[2],  # crypto_name
-                    'Oversold' if alert[1] != f'X:{base.upper()}USD' else 'Overbought',  # alert type
+                    '$$$',     # oversold_alert (for non-base pairs)
+                    alert[3]   # anchored_obv_alert_state
                 ) for alert in alerts]
                 
                 execute_values(cur, f"""
-                    INSERT INTO {alerts_table} (datetime, stock, crypto_name, alert)
-                    VALUES %s
+                    INSERT INTO {alerts_table} (
+                        datetime, stock, crypto_name,
+                        oversold_alert, anchored_obv_alert_state
+                    ) VALUES %s
                 """, values)
             
             conn.commit()

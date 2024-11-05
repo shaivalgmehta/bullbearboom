@@ -58,6 +58,7 @@ def setup_database():
                 force_index_7_week NUMERIC,
                 force_index_52_week NUMERIC,
                 force_index_alert_state TEXT,
+                anchored_obv_alert_state TEXT,        
                 pe_ratio_rank INTEGER,
                 ev_ebitda_rank INTEGER,
                 pb_ratio_rank INTEGER,

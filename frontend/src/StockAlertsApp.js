@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { CircularProgress } from '@mui/material';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, List, ListItem,
-  Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup, FormControlLabel,
+  Divider, useMediaQuery, useTheme, Checkbox, FormGroup, FormControlLabel,
   Tooltip, Select, MenuItem, OutlinedInput, TableContainer
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -19,19 +16,14 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 const columnMap = {
   'stock': 'Stock Symbol',
   'stock_name': 'Stock Name',
-  'alert': 'Alert Type',
+  'oversold_alert': 'Oversold Alert',
+  'anchored_obv_alert_state': 'OBV Alert',
   'datetime': 'Date & Time'
 };
 
-const numericalColumns = [
-];
-
-const filterColumns = [
-  'stock', 'stock_name'
-];
-
-const alertStateOptions = ['Oversold'];
-
+const filterColumns = ['stock', 'stock_name'];
+const alertStateOptions = ['$$$']; // For oversold_alert
+const obvAlertOptions = ['$$$', '-$$$', '-']; // For OBV alerts
 const drawerWidth = 300;
 
 function StockAlertsApp({ drawerOpen, toggleDrawer }) {
@@ -40,7 +32,8 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
   const [filters, setFilters] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [alertTypeFilters, setAlertTypeFilters] = useState({
-    alert: []
+    oversold_alert: [],
+    anchored_obv_alert_state: []
   });
   const [sortConfig, setSortConfig] = useState({ key: 'datetime', direction: 'descending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
@@ -64,10 +57,10 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
     fetchData();
   }, []);
 
-  const handleFilterChange = (column, value, type) => {
+  const handleFilterChange = (column, value) => {
     setFilters(prevFilters => ({
       ...prevFilters,
-      [column]: { ...prevFilters[column], [type]: value }
+      [column]: value.toLowerCase()
     }));
   };
 
@@ -83,11 +76,10 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
   const applyFilters = () => {
     const filtered = alertsData.filter(alert => {
       // Text-based filters for stock and stock_name
-      const matchesTextFilters = Object.entries(filters).every(([column, { min, max }]) => {
-        if (!min && !max) return true;
-        const value = alert[column].toLowerCase();
-        if (min) return value.includes(min.toLowerCase());
-        return true;
+      const matchesTextFilters = Object.entries(filters).every(([column, value]) => {
+        if (!value) return true;
+        const alertValue = String(alert[column]).toLowerCase();
+        return alertValue.includes(value);
       });
 
       // Alert type filters
@@ -104,7 +96,8 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
   const clearFilters = () => {
     setFilters({});
     setAlertTypeFilters({
-      alert: []
+      oversold_alert: [],
+      anchored_obv_alert_state: []
     });
     setFilteredData(alertsData);
   };
@@ -118,12 +111,8 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
   };
 
   const handleColumnVisibilityChange = (event) => {
-    const {
-      target: { value },
-    } = event;
-    setHiddenColumns(
-      typeof value === 'string' ? value.split(',') : value,
-    );
+    const { value } = event.target;
+    setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
   };
 
   const visibleColumns = Object.keys(columnMap).filter(column => !hiddenColumns.includes(column));
@@ -176,6 +165,7 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
             ))}
           </Select>
         </ListItem>
+
         {filterColumns.map((column) => (
           <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
@@ -185,14 +175,15 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
               fullWidth
               size="small"
               placeholder={`Filter ${columnMap[column]}`}
-              onChange={(e) => handleFilterChange(column, e.target.value, 'min')}
-              value={filters[column]?.min || ''}
+              onChange={(e) => handleFilterChange(column, e.target.value)}
+              value={filters[column] || ''}
             />
           </ListItem>
         ))}
+
         <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Alert Types
+            Oversold Alert Types
           </Typography>
           <FormGroup>
             {alertStateOptions.map((option) => (
@@ -200,8 +191,28 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
                 key={option}
                 control={
                   <Checkbox
-                    checked={alertTypeFilters.alert.includes(option)}
-                    onChange={() => handleAlertTypeFilterChange('alert', option)}
+                    checked={alertTypeFilters.oversold_alert.includes(option)}
+                    onChange={() => handleAlertTypeFilterChange('oversold_alert', option)}
+                  />
+                }
+                label={option}
+              />
+            ))}
+          </FormGroup>
+        </ListItem>
+
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            OBV Alert Types
+          </Typography>
+          <FormGroup>
+            {obvAlertOptions.map((option) => (
+              <FormControlLabel
+                key={option}
+                control={
+                  <Checkbox
+                    checked={alertTypeFilters.anchored_obv_alert_state.includes(option)}
+                    onChange={() => handleAlertTypeFilterChange('anchored_obv_alert_state', option)}
                   />
                 }
                 label={option}
@@ -293,8 +304,7 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
                         padding: '8px 12px',
                         fontSize: '0.9rem',
                         fontWeight: 'bold',
-                        backgroundColor: '#f8f9fa',
-                        ...(key === 'stock_name' && { width: '200px' })
+                        backgroundColor: '#f8f9fa'
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" }}>
@@ -325,12 +335,7 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
                         sx={{ 
                           whiteSpace: 'nowrap', 
                           padding: '8px 12px',
-                          fontSize: '0.85rem',
-                          ...(column === 'stock_name' && {
-                            maxWidth: '200px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          })
+                          fontSize: '0.85rem'
                         }}
                       >
                         {column === 'stock_name' ? (

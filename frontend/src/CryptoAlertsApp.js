@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { CircularProgress } from '@mui/material';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, List, ListItem,
-  Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup,
-  Tooltip, Select, MenuItem, OutlinedInput, TableContainer, Tabs, Tab,
-  CircularProgress
+  Divider, useMediaQuery, useTheme, Checkbox, FormGroup, FormControlLabel,
+  Tooltip, Select, MenuItem, OutlinedInput, TableContainer, Tabs, Tab
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -16,11 +16,14 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 const columnMap = {
   'stock': 'Symbol',
   'crypto_name': 'Name',
-  'alert': 'Alert Type',
+  'oversold_alert': 'Oversold Alert',
+  'anchored_obv_alert_state': 'OBV Alert',
   'datetime': 'Date & Time'
 };
 
 const filterColumns = ['stock', 'crypto_name'];
+const alertStateOptions = ['$$$'];
+const obvAlertOptions = ['$$$', '-$$$', '-'];
 const drawerWidth = 300;
 
 function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
@@ -29,6 +32,10 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
   const [filters, setFilters] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedBase, setSelectedBase] = useState('usd');
+  const [alertTypeFilters, setAlertTypeFilters] = useState({
+    oversold_alert: [],
+    anchored_obv_alert_state: []
+  });
   const [sortConfig, setSortConfig] = useState({ key: 'datetime', direction: 'descending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const theme = useTheme();
@@ -61,13 +68,28 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     }));
   };
 
+  const handleAlertTypeFilterChange = (column, value) => {
+    setAlertTypeFilters(prevFilters => ({
+      ...prevFilters,
+      [column]: prevFilters[column].includes(value)
+        ? prevFilters[column].filter(v => v !== value)
+        : [...prevFilters[column], value]
+    }));
+  };
+
   const applyFilters = () => {
     const filtered = alertsData.filter(alert => {
-      return Object.entries(filters).every(([column, value]) => {
+      const matchesTextFilters = Object.entries(filters).every(([column, value]) => {
         if (!value) return true;
         const alertValue = String(alert[column]).toLowerCase();
         return alertValue.includes(value);
       });
+
+      const matchesAlertTypes = Object.entries(alertTypeFilters).every(([column, selectedTypes]) => {
+        return selectedTypes.length === 0 || selectedTypes.includes(alert[column]);
+      });
+
+      return matchesTextFilters && matchesAlertTypes;
     });
     setFilteredData(filtered);
     if (isMobile) toggleDrawer();
@@ -75,6 +97,10 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
 
   const clearFilters = () => {
     setFilters({});
+    setAlertTypeFilters({
+      oversold_alert: [],
+      anchored_obv_alert_state: []
+    });
     setFilteredData(alertsData);
   };
 
@@ -97,12 +123,10 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     let sortableItems = [...filteredData];
     if (sortConfig.key !== null) {
       sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-        if (aValue < bValue) {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (aValue > bValue) {
+        if (a[sortConfig.key] > b[sortConfig.key]) {
           return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
@@ -110,13 +134,6 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     }
     return sortableItems;
   }, [filteredData, sortConfig]);
-
-  const formatValue = (column, value) => {
-    if (column === 'datetime') {
-      return new Date(value).toLocaleString();
-    }
-    return value;
-  };
 
   const drawer = (
     <Box sx={{ p: 2 }}>
@@ -145,6 +162,7 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
             <Tab label="BTC" value="btc" />
           </Tabs>
         </ListItem>
+
         <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
             Hide Columns
@@ -165,6 +183,7 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
             ))}
           </Select>
         </ListItem>
+
         {filterColumns.map((column) => (
           <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
@@ -179,6 +198,46 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
             />
           </ListItem>
         ))}
+
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            Oversold Alert Types
+          </Typography>
+          <FormGroup>
+            {alertStateOptions.map((option) => (
+              <FormControlLabel
+                key={option}
+                control={
+                  <Checkbox
+                    checked={alertTypeFilters.oversold_alert.includes(option)}
+                    onChange={() => handleAlertTypeFilterChange('oversold_alert', option)}
+                  />
+                }
+                label={option}
+              />
+            ))}
+          </FormGroup>
+        </ListItem>
+
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            OBV Alert Types
+          </Typography>
+          <FormGroup>
+            {obvAlertOptions.map((option) => (
+              <FormControlLabel
+                key={option}
+                control={
+                  <Checkbox
+                    checked={alertTypeFilters.anchored_obv_alert_state.includes(option)}
+                    onChange={() => handleAlertTypeFilterChange('anchored_obv_alert_state', option)}
+                  />
+                }
+                label={option}
+              />
+            ))}
+          </FormGroup>
+        </ListItem>
       </List>
       <Box sx={{ mt: 2 }}>
         <Button variant="contained" fullWidth onClick={applyFilters} sx={{ mb: 1 }}>
@@ -190,6 +249,13 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
       </Box>
     </Box>
   );
+
+  const formatValue = (column, value) => {
+    if (column === 'datetime') {
+      return new Date(value).toLocaleString();
+    }
+    return value;
+  };
 
   return (
     <Box sx={{ 
