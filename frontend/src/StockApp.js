@@ -14,6 +14,7 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import { Link } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -458,7 +459,21 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                         })
                       }}
                     >
-                      {column === 'stock_name' ? (
+                      {column === 'stock' ? (
+                        <Link 
+                          to={`/stock/${stock[column]}`}
+                          sx={{ 
+                            textDecoration: 'none',
+                            color: 'primary.main',
+                            '&:hover': {
+                              textDecoration: 'underline'
+                            }
+                          }}
+                          component="button"
+                        >
+                          {formatColumnValue(column, stock[column])}
+                        </Link>
+                      ) : column === 'stock_name' ? (
                         <Tooltip title={stock[column]} placement="top">
                           <span>{formatColumnValue(column, stock[column])}</span>
                         </Tooltip>

@@ -54,6 +54,7 @@ def get_db_connection():
         logging.error(f"Database connection failed: {e}")
         raise
 
+########### STOCK APIS #############################################
 @app.route('/api/stocks/latest')
 def get_latest_stock_data():
     logging.info("Fetching latest data for all stocks")
@@ -113,6 +114,70 @@ def get_alerts_data():
         logging.error(f"Error fetching alerts data: {e}")
         return jsonify({"error": "Failed to fetch alerts data"}), 500
 
+@app.route('/api/stocks/<symbol>/historical')
+def get_stock_historical_data(symbol):
+    logging.info(f"Fetching historical data for stock {symbol}")
+    try:
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            # Default to last month if no dates provided
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Query for both force index and Williams %R data
+        query = """
+            SELECT 
+                datetime,
+                force_index_7_week,
+                force_index_52_week,
+                williams_r,
+                williams_r_ema
+            FROM us_weekly_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """
+        
+        cur.execute(query, (symbol, start_date, end_date))
+        data = cur.fetchall()
+        
+        # Also fetch basic stock info
+        cur.execute("""
+            SELECT DISTINCT stock_name
+            FROM us_daily_table
+            WHERE stock = %s
+            LIMIT 1
+        """, (symbol,))
+        stock_info = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not data:
+            return jsonify({
+                "error": f"No data found for stock {symbol}"
+            }), 404
+            
+        return jsonify({
+            "symbol": symbol,
+            "stock_name": stock_info['stock_name'] if stock_info else None,
+            "data": data
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+################## CRYPTO APIS #############################################
 @app.route('/api/crypto/latest')
 def get_latest_crypto_data():
     logging.info("Fetching latest data for all stocks")

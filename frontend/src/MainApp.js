@@ -8,7 +8,8 @@ import StockAlertsApp from './StockAlertsApp';
 import CryptoApp from './CryptoApp';
 import CryptoETHApp from './CryptoETHApp';
 import CryptoBTCApp from './CryptoBTCApp';
-import CryptoAlertsApp from './CryptoAlertsApp'; // Add this import
+import CryptoAlertsApp from './CryptoAlertsApp';
+import StockDetailApp from './StockDetailApp';
 
 function MainApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -53,11 +54,6 @@ function MainApp() {
               Bull Bear Boom
             </Typography>
 
-            {/* Stocks Menu */}
-            <Button color="inherit" component={Link} to="/">
-              Stocks
-            </Button>
-
             {/* Alerts Menu */}
             <Box>
               <Button 
@@ -74,7 +70,7 @@ function MainApp() {
               >
                 <MenuItem 
                   component={Link} 
-                  to="/stock_alerts"
+                  to="/"
                   onClick={handleAlertsMenuClose}
                 >
                   Stock Alerts
@@ -88,7 +84,11 @@ function MainApp() {
                 </MenuItem>
               </Menu>
             </Box>
-
+            {/* Stocks Menu */}
+            <Button color="inherit" component={Link} to="/us_stocks">
+              Stocks
+            </Button>
+            
             {/* Crypto Menu */}
             <Box>
               <Button 
@@ -131,12 +131,13 @@ function MainApp() {
 
         <Box sx={{ flexGrow: 1, mt: '64px' }}>
           <Routes>
-            <Route path="/" element={<StockApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
-            <Route path="/stock_alerts" element={<StockAlertsApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
-            <Route path="/crypto_alerts" element={<CryptoAlertsApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
-            <Route path="/crypto" element={<CryptoApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
-            <Route path="/crypto_eth" element={<CryptoETHApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
-            <Route path="/crypto_btc" element={<CryptoBTCApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="/" element={<StockAlertsApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="us_stocks" element={<StockApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="stock/:symbol" element={<StockDetailApp />} />
+            <Route path="crypto_alerts" element={<CryptoAlertsApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="crypto" element={<CryptoApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="crypto_eth" element={<CryptoETHApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="crypto_btc" element={<CryptoBTCApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
           </Routes>
         </Box>
       </Box>

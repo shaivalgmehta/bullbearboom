@@ -76,7 +76,8 @@ def setup_database():
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
                 stock_name TEXT,
-                alert TEXT,
+                oversold_alert TEXT,
+                anchored_obv_alert_state TEXT,
                 CONSTRAINT us_alerts_pkey PRIMARY KEY (datetime, stock)
             """)
 

@@ -10,6 +10,7 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import { Link } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -338,7 +339,17 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
                           fontSize: '0.85rem'
                         }}
                       >
-                        {column === 'stock_name' ? (
+                        {column === 'stock' ? (
+                          <Link 
+                            to={`/stock/${alert[column]}`}  // Add leading slash for absolute path
+                            style={{ 
+                              color: '#1976d2', 
+                              textDecoration: 'none'
+                            }}
+                          >
+                            {formatValue(column, alert[column])}
+                          </Link>
+                        ) : column === 'stock_name' ? (
                           <Tooltip title={alert[column]} placement="top">
                             <span>{formatValue(column, alert[column])}</span>
                           </Tooltip>

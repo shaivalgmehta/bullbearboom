@@ -62,7 +62,8 @@ def setup_database():
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
                 crypto_name TEXT,
-                alert TEXT,
+                oversold_alert TEXT,
+                anchored_obv_alert_state TEXT,
                 CONSTRAINT crypto_alerts_pkey PRIMARY KEY (datetime, stock)
             """)
 
@@ -146,7 +147,8 @@ def setup_database():
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
                 crypto_name TEXT,
-                alert TEXT,
+                oversold_alert TEXT,
+                anchored_obv_alert_state TEXT,
                 CONSTRAINT crypto_alerts_eth_pkey PRIMARY KEY (datetime, stock)
             """)
 
@@ -231,7 +233,8 @@ def setup_database():
                 datetime TIMESTAMPTZ NOT NULL,
                 stock TEXT NOT NULL,
                 crypto_name TEXT,
-                alert TEXT,
+                oversold_alert TEXT,
+                anchored_obv_alert_state TEXT,
                 CONSTRAINT crypto_alerts_btc_pkey PRIMARY KEY (datetime, stock)
             """)
 
