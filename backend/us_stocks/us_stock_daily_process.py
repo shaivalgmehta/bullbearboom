@@ -116,7 +116,7 @@ def process_stock(stock, end_date):
 
         # Transform the data for daily table
         stock_transformed_data = stock_data_transformer.transform(combined_data)[0]
-        
+        print(f'{stock_transformed_data}')
         # Store the transformed data
         store_stock_data(stock_transformed_data)
         

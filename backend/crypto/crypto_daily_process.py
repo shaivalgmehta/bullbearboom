@@ -249,7 +249,7 @@ def main():
         # Move to the next day
         current_date += timedelta(days=1)
 
-    print("\nAll stocks have been processed for all base currencies for the last 10 days.")
+    print("\nAll stocks have been processed for all base currencies")
 
     ################## RANK EMA #############################################################
 

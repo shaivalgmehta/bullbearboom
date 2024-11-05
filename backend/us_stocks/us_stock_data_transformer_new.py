@@ -58,13 +58,17 @@ class CoreDataTransformer(BaseTransformer):
             technical_indicator = data['technical_indicator']
             statistics = data['statistics']
             price_changes = data.get('price_changes', {})
-            
+        
+        
             # Handle case where technical_indicator is empty list
             if not technical_indicator:
                 return []
             
             # Handle both list and dictionary cases for technical_indicator
             tech_data = technical_indicator[0] if isinstance(technical_indicator, list) else technical_indicator
+
+            pe_ratio = self._parse_numeric(statistics['statistics']['valuations_metrics']['trailing_pe'])
+            pb_ratio = self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_book_mrq'])
    
             transformed_data = {
                 'datetime': tech_data['datetime'],
@@ -83,7 +87,9 @@ class CoreDataTransformer(BaseTransformer):
                 'peg_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['peg_ratio']),
                 'price_change_3m': self._parse_numeric(price_changes.get('price_change_3m')),
                 'price_change_6m': self._parse_numeric(price_changes.get('price_change_6m')),
-                'price_change_12m': self._parse_numeric(price_changes.get('price_change_12m'))
+                'price_change_12m': self._parse_numeric(price_changes.get('price_change_12m')),
+                'earnings_yield': 1 / pe_ratio if pe_ratio and pe_ratio != 0 else None,
+                'book_to_price': 1 / pb_ratio if pb_ratio and pb_ratio != 0 else None
             }
             return [transformed_data]
         except KeyError as e:

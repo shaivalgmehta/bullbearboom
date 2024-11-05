@@ -27,10 +27,10 @@ class MetricRanker:
     def __init__(self, db_params: Dict[str, Any]):
         self.db_params = db_params
         # Define metrics that should exclude negative values
-        self.exclude_negatives = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio']
+        self.exclude_negatives = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio', 'earnings_yield', 'book_to_price']
         
         # Define metrics that should exclude near-zero values
-        self.exclude_near_zero = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio']
+        self.exclude_near_zero = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio', 'earnings_yield', 'book_to_price']
         
         # Define ranking direction for each metric
         # True means higher value is better (rank 1)
@@ -41,6 +41,8 @@ class MetricRanker:
             'ev_ebitda': False,  # Lower EV/EBITDA is better (cheaper valuation)
             'pb_ratio': False,  # Lower P/B is better (cheaper relative to book value)
             'peg_ratio': False,  # Lower PEG is better (growth adjusted P/E)
+            'earnings_yield': True,  # Higher earnings yield is better
+            'book_to_price': True,   # Higher book to price is better            
         }
 
     def get_previous_date(self, current_date: datetime, frequency: str) -> datetime:
@@ -66,6 +68,8 @@ class MetricRanker:
             'ev_ebitda': 1.0,    # Absolute minimum EV/EBITDA
             'pb_ratio': 0.2,     # Absolute minimum P/B
             'peg_ratio': 0.2     # Absolute minimum PEG
+            'earnings_yield': 0.005,     # Absolute minimum Earnings Yield
+            'book_to_price': 0.05     # Absolute minimum B/P
         }
         
         # Handle unrealistic values for specified metrics
@@ -128,7 +132,9 @@ class MetricRanker:
                     pe_ratio_rank = NULL,
                     ev_ebitda_rank = NULL,
                     pb_ratio_rank = NULL,
-                    peg_ratio_rank = NULL
+                    peg_ratio_rank = NULL,
+                    earnings_yield_rank = NULL,
+                    book_to_price_rank = NULL
                 WHERE datetime = %s
             """, (daily_date,))
             
@@ -156,6 +162,8 @@ class MetricRanker:
                         ev_ebitda_rank = CASE WHEN c.metric = 'ev_ebitda' THEN c.rank ELSE t.ev_ebitda_rank END,
                         pb_ratio_rank = CASE WHEN c.metric = 'pb_ratio' THEN c.rank ELSE t.pb_ratio_rank END,
                         peg_ratio_rank = CASE WHEN c.metric = 'peg_ratio' THEN c.rank ELSE t.peg_ratio_rank END
+                        earnings_yield_rank = CASE WHEN c.metric = 'earnings_yield' THEN c.rank ELSE t.earnings_yield_rank END,
+                        book_to_price_rank = CASE WHEN c.metric = 'book_to_price' THEN c.rank ELSE t.book_to_price_rank END
                     FROM (VALUES %s) AS c(stock, datetime, metric, rank)
                     WHERE t.stock = c.stock AND t.datetime = c.datetime
                     """,

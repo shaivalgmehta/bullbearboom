@@ -26,6 +26,8 @@ const columnMap = {
   'ev_ebitda': 'EV/EBITDA',
   'pb_ratio': 'P/B Ratio',
   'peg_ratio': 'PEG Ratio',
+  'earnings_yield': 'Earnings Yield',
+  'book_to_price': 'B/P Ratio',
   'last_quarter_sales': 'Last Quarter Sales',
   'current_quarter_sales': 'Current Quarter Sales',
   'sales_change_percent': 'Sales % Change',
@@ -45,6 +47,8 @@ const columnMap = {
   'ev_ebitda_rank': 'EV/EBITDA Ranking',
   'pb_ratio_rank': 'P/B Ratio Ranking',
   'peg_ratio_rank': 'PEG Ratio Ranking',
+  'earnings_yield_rank': 'Earnings Yield Rank',
+  'book_to_price_rank': 'Book to Price Rank',
   'price_change_3m': '3-Month Price Change',
   'price_change_6m': '6-Month Price Change',
   'price_change_12m': '12-Month Price Change',
@@ -55,13 +59,14 @@ const numericalColumns = [
   'market_cap', 'close', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
   'peg_ratio', 'current_quarter_sales', 'last_quarter_sales', 'current_quarter_ebitda', 'last_quarter_ebitda', 'ema',
   'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'pe_ratio_rank', 'ev_ebitda_rank',
-  'pb_ratio_rank', 'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m'
+  'pb_ratio_rank', 'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m', 'earnings_yield',
+  'book_to_price', 'earnings_yield_rank', 'book_to_price_rank'
 ];
 
 const filterColumns = [
   'market_cap', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
   'peg_ratio', 'current_quarter_sales', 'current_quarter_ebitda', 'ema', 'pe_ratio_rank', 'ev_ebitda_rank',
-  'pb_ratio_rank', 'peg_ratio_rank'
+  'pb_ratio_rank', 'peg_ratio_rank', 'earnings_yield_rank', 'book_to_price_rank'
 ];
 
 const alertStateOptions = ['$', '$$$', '-'];
@@ -102,6 +107,8 @@ const formatColumnValue = (column, value) => {
     case 'ev_ebitda':
     case 'pb_ratio':
     case 'peg_ratio':
+    case 'earnings_yield':
+    case 'book_to_price':      
     case 'ema':
     case 'williams_r':
     case 'williams_r_ema':
@@ -118,6 +125,8 @@ const formatColumnValue = (column, value) => {
     case 'ev_ebitda_rank':
     case 'pb_ratio_rank':
     case 'peg_ratio_rank':
+    case 'earnings_yield_rank':
+    case 'book_to_price_rank':      
       return formatRank(value);
     case 'datetime':
       return new Date(value).toLocaleString();

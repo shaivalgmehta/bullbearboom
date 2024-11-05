@@ -483,13 +483,15 @@ def store_stock_data(data):
         data['peg_ratio'],
         data['price_change_3m'],
         data['price_change_6m'],
-        data['price_change_12m'],                
+        data['price_change_12m'],
+        data['earnings_yield'],
+        data['book_to_price'],                 
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO us_daily_table (
-            datetime, stock, stock_name, ema, open, close, volume, high, low, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, price_change_3m, price_change_6m, price_change_12m, last_modified_date
+            datetime, stock, stock_name, ema, open, close, volume, high, low, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, price_change_3m, price_change_6m, price_change_12m, earnings_yield, book_to_price, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -506,7 +508,9 @@ def store_stock_data(data):
             peg_ratio = EXCLUDED.peg_ratio,
             price_change_3m = EXCLUDED.price_change_3m,
             price_change_6m = EXCLUDED.price_change_6m,
-            price_change_12m = EXCLUDED.price_change_12m,            
+            price_change_12m = EXCLUDED.price_change_12m,
+            earnings_yield = EXCLUDED.earnings_yield,
+            book_to_price = EXCLUDED.book_to_price,                
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 
