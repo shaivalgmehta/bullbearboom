@@ -9,7 +9,8 @@ import CryptoApp from './CryptoApp';
 import CryptoETHApp from './CryptoETHApp';
 import CryptoBTCApp from './CryptoBTCApp';
 import CryptoAlertsApp from './CryptoAlertsApp';
-import StockDetailApp from './StockDetailApp';
+import StockDetailApp from './StockDetailApp/StockDetailApp';
+import CryptoDetailApp from './CryptoDetailApp/CryptoDetailApp';
 
 function MainApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -84,6 +85,7 @@ function MainApp() {
                 </MenuItem>
               </Menu>
             </Box>
+            
             {/* Stocks Menu */}
             <Button color="inherit" component={Link} to="/us_stocks">
               Stocks
@@ -138,6 +140,9 @@ function MainApp() {
             <Route path="crypto" element={<CryptoApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="crypto_eth" element={<CryptoETHApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
             <Route path="crypto_btc" element={<CryptoBTCApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="crypto/:symbol" element={<CryptoDetailApp />} />
+            <Route path="crypto_eth/:symbol" element={<CryptoDetailApp />} />
+            <Route path="crypto_btc/:symbol" element={<CryptoDetailApp />} />
           </Routes>
         </Box>
       </Box>

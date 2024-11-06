@@ -14,6 +14,8 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import { Link } from 'react-router-dom';
+
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -407,29 +409,42 @@ function CryptoETHApp({ drawerOpen, toggleDrawer }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedData.map((stock, index) => (
+              {sortedData.map((crypto, index) => (
                 <TableRow key={index} hover>
                   {visibleColumns.map((column, colIndex) => (
                     <TableCell 
                       key={colIndex} 
-                      align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
+                      align={column === 'stock' || column === 'crypto_name' ? "left" : "center"}
                       sx={{ 
                         whiteSpace: 'nowrap', 
                         padding: '8px 12px',
                         fontSize: '0.85rem',
-                        ...(column === 'stock_name' && {
+                        ...(column === 'crypto_name' && {
                           maxWidth: '200px',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis'
                         })
                       }}
                     >
-                      {column === 'stock_name' ? (
-                        <Tooltip title={stock[column]} placement="top">
-                          <span>{formatColumnValue(column, stock[column])}</span>
+                      {column === 'stock' ? (
+                        <Link 
+                          to={`/crypto_eth/${crypto[column]}`}
+                          style={{ 
+                            color: '#1976d2', 
+                            textDecoration: 'none',
+                            '&:hover': {
+                              textDecoration: 'underline'
+                            }
+                          }}
+                        >
+                          {formatColumnValue(column, crypto[column])}
+                        </Link>
+                      ) : column === 'crypto_name' ? (
+                        <Tooltip title={crypto[column]} placement="top">
+                          <span>{formatColumnValue(column, crypto[column])}</span>
                         </Tooltip>
                       ) : (
-                        formatColumnValue(column, stock[column])
+                        formatColumnValue(column, crypto[column])
                       )}
                     </TableCell>
                   ))}

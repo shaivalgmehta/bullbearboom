@@ -8,15 +8,16 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { Box, Paper, Typography } from '@mui/material';
 
-const ForceIndexGraph = ({ data }) => {
+const WilliamsRGraph = ({ data, base = 'USD', formatValue }) => {
   if (!data || data.length === 0) {
     return (
       <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography color="text.secondary">No force index data available</Typography>
+        <Typography color="text.secondary">No Williams %R data available</Typography>
       </Box>
     );
   }
@@ -25,16 +26,9 @@ const ForceIndexGraph = ({ data }) => {
     return format(parseISO(dateStr), 'MMM d, yyyy');
   };
 
-  // Format large numbers in a readable way
-  const formatYAxis = (value) => {
-    if (Math.abs(value) >= 1e9) {
-      return (value / 1e9).toFixed(1) + 'B';
-    } else if (Math.abs(value) >= 1e6) {
-      return (value / 1e6).toFixed(1) + 'M';
-    } else if (Math.abs(value) >= 1e3) {
-      return (value / 1e3).toFixed(1) + 'K';
-    }
-    return value.toFixed(1);
+  const formatTooltipValue = (value) => {
+    if (typeof value !== 'number') return 'N/A';
+    return value.toFixed(2);
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -50,7 +44,7 @@ const ForceIndexGraph = ({ data }) => {
               variant="body2"
               sx={{ color: entry.color }}
             >
-              {entry.name}: {formatYAxis(entry.value)}
+              {entry.name}: {formatTooltipValue(entry.value)}
             </Typography>
           ))}
         </Paper>
@@ -59,26 +53,12 @@ const ForceIndexGraph = ({ data }) => {
     return null;
   };
 
-  // Calculate padding for Y axis based on data range
-  const calculateYAxisDomain = () => {
-    const values = data.flatMap(d => [
-      d.force_index_7_week,
-      d.force_index_52_week
-    ]).filter(v => v !== null && v !== undefined);
-    
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const padding = (max - min) * 0.1; // Add 10% padding
-
-    return [min - padding, max + padding];
-  };
-
   return (
     <Box sx={{ width: '100%', height: 400 }}>
       <ResponsiveContainer>
         <ComposedChart
           data={data}
-          margin={{ top: 10, right: 30, left: 50, bottom: 70 }} // Increased left margin
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
           <XAxis
@@ -87,37 +67,38 @@ const ForceIndexGraph = ({ data }) => {
             angle={-45}
             textAnchor="end"
             height={60}
-            interval={0}
-            tick={{ fontSize: 12 }}
           />
           <YAxis 
-            tickFormatter={formatYAxis}
-            domain={calculateYAxisDomain()}
-            width={60} // Ensure enough width for labels
-            tick={{ fontSize: 12 }}
+            domain={[-100, 0]} 
+            ticks={[-100, -80, -60, -50, -40, -20, 0]}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Legend 
-            verticalAlign="bottom" 
-            height={36}
-            wrapperStyle={{ 
-              bottom: -60,
-              fontSize: '12px'
-            }}
+          <Legend />
+          {/* Add reference line for overbought/oversold threshold */}
+          <ReferenceLine 
+            y={-50} 
+            stroke="#666" 
+            strokeDasharray="3 3" 
+            label={{ 
+              value: "Oversold Threshold (-50)", 
+              position: "right",
+              fill: "#666",
+              fontSize: 12
+            }} 
           />
           <Line
             type="linear"
-            dataKey="force_index_7_week"
-            stroke="#8884d8"
-            name="7-Week Force Index"
+            dataKey="williams_r"
+            stroke="#ff7300"
+            name="Williams %R"
             dot={false}
             strokeWidth={2}
           />
           <Line
             type="linear"
-            dataKey="force_index_52_week"
-            stroke="#82ca9d"
-            name="52-Week Force Index"
+            dataKey="williams_r_ema"
+            stroke="#2196f3"
+            name="Williams %R EMA"
             dot={false}
             strokeWidth={2}
           />
@@ -127,4 +108,4 @@ const ForceIndexGraph = ({ data }) => {
   );
 };
 
-export default ForceIndexGraph;
+export default WilliamsRGraph;

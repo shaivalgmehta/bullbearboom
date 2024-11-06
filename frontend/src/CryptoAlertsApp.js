@@ -10,6 +10,7 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import { Link } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -40,6 +41,18 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+
+  const getDetailLink = (symbol, selectedBase) => {
+    switch(selectedBase.toLowerCase()) {
+      case 'eth':
+        return `/crypto_eth/${symbol}`;
+      case 'btc':
+        return `/crypto_btc/${symbol}`;
+      default:
+        return `/crypto/${symbol}`;
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -356,7 +369,20 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
                           fontSize: '0.85rem'
                         }}
                       >
-                        {column === 'crypto_name' ? (
+                        {column === 'stock' ? (
+                          <Link 
+                            to={getDetailLink(alert[column], selectedBase)}
+                            style={{ 
+                              color: '#1976d2', 
+                              textDecoration: 'none',
+                              '&:hover': {
+                                textDecoration: 'underline'
+                              }
+                            }}
+                          >
+                            {formatValue(column, alert[column])}
+                          </Link>
+                        ) : column === 'crypto_name' ? (
                           <Tooltip title={alert[column]} placement="top">
                             <span>{formatValue(column, alert[column])}</span>
                           </Tooltip>

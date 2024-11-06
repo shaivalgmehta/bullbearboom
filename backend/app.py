@@ -352,5 +352,188 @@ def get_crypto_alerts_btc():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/crypto/<symbol>/historical')
+def get_crypto_historical_data(symbol):
+    logging.info(f"Fetching historical data for crypto {symbol} (USD base)")
+    try:
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Query for both force index and Williams %R data
+        query = """
+            SELECT 
+                datetime,
+                force_index_7_week,
+                force_index_52_week,
+                williams_r,
+                williams_r_ema
+            FROM crypto_weekly_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """
+        
+        cur.execute(query, (symbol, start_date, end_date))
+        data = cur.fetchall()
+        
+        # Also fetch basic crypto info
+        cur.execute("""
+            SELECT DISTINCT stock_name, crypto_name
+            FROM crypto_daily_table
+            WHERE stock = %s
+            LIMIT 1
+        """, (symbol,))
+        crypto_info = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not data:
+            return jsonify({
+                "error": f"No data found for crypto {symbol}"
+            }), 404
+            
+        return jsonify({
+            "symbol": symbol,
+            "stock_name": crypto_info['stock_name'] if crypto_info else None,
+            "crypto_name": crypto_info['crypto_name'] if crypto_info else None,
+            "data": data
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/<symbol>/historical_eth')
+def get_crypto_historical_data_eth(symbol):
+    logging.info(f"Fetching historical data for crypto {symbol} (ETH base)")
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                datetime,
+                force_index_7_week,
+                force_index_52_week,
+                williams_r,
+                williams_r_ema
+            FROM crypto_weekly_table_eth
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """
+        
+        cur.execute(query, (symbol, start_date, end_date))
+        data = cur.fetchall()
+        
+        cur.execute("""
+            SELECT DISTINCT stock_name, crypto_name
+            FROM crypto_daily_table_eth
+            WHERE stock = %s
+            LIMIT 1
+        """, (symbol,))
+        crypto_info = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not data:
+            return jsonify({
+                "error": f"No data found for crypto {symbol} (ETH base)"
+            }), 404
+            
+        return jsonify({
+            "symbol": symbol,
+            "stock_name": crypto_info['stock_name'] if crypto_info else None,
+            "crypto_name": crypto_info['crypto_name'] if crypto_info else None,
+            "data": data
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical ETH base data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/<symbol>/historical_btc')
+def get_crypto_historical_data_btc(symbol):
+    logging.info(f"Fetching historical data for crypto {symbol} (BTC base)")
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+            SELECT 
+                datetime,
+                force_index_7_week,
+                force_index_52_week,
+                williams_r,
+                williams_r_ema
+            FROM crypto_weekly_table_btc
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """
+        
+        cur.execute(query, (symbol, start_date, end_date))
+        data = cur.fetchall()
+        
+        cur.execute("""
+            SELECT DISTINCT stock_name, crypto_name
+            FROM crypto_daily_table_btc
+            WHERE stock = %s
+            LIMIT 1
+        """, (symbol,))
+        crypto_info = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not data:
+            return jsonify({
+                "error": f"No data found for crypto {symbol} (BTC base)"
+            }), 404
+            
+        return jsonify({
+            "symbol": symbol,
+            "stock_name": crypto_info['stock_name'] if crypto_info else None,
+            "crypto_name": crypto_info['crypto_name'] if crypto_info else None,
+            "data": data
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical BTC base data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+        
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
