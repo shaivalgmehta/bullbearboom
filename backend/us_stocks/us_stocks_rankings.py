@@ -161,7 +161,7 @@ class MetricRanker:
                         pe_ratio_rank = CASE WHEN c.metric = 'pe_ratio' THEN c.rank ELSE t.pe_ratio_rank END,
                         ev_ebitda_rank = CASE WHEN c.metric = 'ev_ebitda' THEN c.rank ELSE t.ev_ebitda_rank END,
                         pb_ratio_rank = CASE WHEN c.metric = 'pb_ratio' THEN c.rank ELSE t.pb_ratio_rank END,
-                        peg_ratio_rank = CASE WHEN c.metric = 'peg_ratio' THEN c.rank ELSE t.peg_ratio_rank END
+                        peg_ratio_rank = CASE WHEN c.metric = 'peg_ratio' THEN c.rank ELSE t.peg_ratio_rank END,
                         earnings_yield_rank = CASE WHEN c.metric = 'earnings_yield' THEN c.rank ELSE t.earnings_yield_rank END,
                         book_to_price_rank = CASE WHEN c.metric = 'book_to_price' THEN c.rank ELSE t.book_to_price_rank END
                     FROM (VALUES %s) AS c(stock, datetime, metric, rank)
