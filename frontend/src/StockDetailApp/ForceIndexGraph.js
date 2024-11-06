@@ -69,7 +69,7 @@ const ForceIndexGraph = ({ data }) => {
             type="linear"
             dataKey="force_index_7_week"
             stroke="#8884d8"
-            name="7-Week Force Index"
+            name="4-Week Force Index"
             dot={false}
             strokeWidth={2}
           />
@@ -77,7 +77,7 @@ const ForceIndexGraph = ({ data }) => {
             type="linear"
             dataKey="force_index_52_week"
             stroke="#82ca9d"
-            name="52-Week Force Index"
+            name="14-Week Force Index"
             dot={false}
             strokeWidth={2}
           />

@@ -135,7 +135,7 @@ function StockDetailApp() {
                 </Typography>
                 <Typography variant="body2" color="text.secondary" paragraph>
                   The Force Index combines price and volume to measure the strength of price movements.
-                  Crossovers between the 7-week and 52-week EMAs can signal potential trend changes.
+                  Crossovers between the 4-week and 14-week EMAs can signal potential trend changes.
                 </Typography>
                 <ForceIndexGraph data={stockData?.data || []} />
               </CardContent>
