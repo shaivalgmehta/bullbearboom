@@ -67,7 +67,7 @@ class MetricRanker:
             'pe_ratio': 0.5,     # Absolute minimum P/E
             'ev_ebitda': 1.0,    # Absolute minimum EV/EBITDA
             'pb_ratio': 0.2,     # Absolute minimum P/B
-            'peg_ratio': 0.2     # Absolute minimum PEG
+            'peg_ratio': 0.2,     # Absolute minimum PEG
             'earnings_yield': 0.005,     # Absolute minimum Earnings Yield
             'book_to_price': 0.05     # Absolute minimum B/P
         }
