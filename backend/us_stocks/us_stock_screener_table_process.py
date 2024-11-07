@@ -35,11 +35,13 @@ def update_screener_table(selected_date=None):
             cur.execute("""
                 INSERT INTO us_screener_table (
                     datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema, pe_ratio_rank,
-                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank
+                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
+                price_change_3m, price_change_6m, price_change_12m
                 )
                 SELECT DISTINCT ON (stock)
                     datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema, pe_ratio_rank,
-                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank
+                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
+                price_change_3m, price_change_6m, price_change_12m
                 FROM 
                     us_daily_table
                 WHERE 

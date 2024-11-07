@@ -96,7 +96,7 @@ class MetricRanker:
 
     def rank_metrics(self, conn, date: datetime) -> Dict[str, pd.DataFrame]:
         """Rank all metrics for the given date."""
-        daily_metrics = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio']
+        daily_metrics = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio', 'earnings_yield', 'book_to_price']
         
         # Get daily metrics
         daily_date = self.get_previous_date(date, 'daily')
@@ -122,7 +122,7 @@ class MetricRanker:
     def update_rankings(self, conn, rankings: Dict[str, pd.DataFrame], date: datetime):
         """Update all rankings in a single bulk operation."""
         daily_date = self.get_previous_date(date, 'daily')
-        daily_metrics = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio']
+        daily_metrics = ['pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio', 'earnings_yield', 'book_to_price']
         
         with conn.cursor() as cur:
             # First, set all ranks to NULL for this date
