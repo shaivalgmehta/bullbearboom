@@ -567,8 +567,6 @@ def store_stock_daily_data(data_list):
             data['volume'],
             data['high'],
             data['low'],
-            data.get('all_time_high'),
-            data.get('ath_percentage'),
             datetime.now(timezone.utc)
         )
         for data in data_list
@@ -577,7 +575,7 @@ def store_stock_daily_data(data_list):
     execute_values(cur, """
         INSERT INTO crypto_daily_table (
             datetime, stock, stock_name, crypto_name, open, close, volume, high, low,
-            all_time_high, ath_percentage, last_modified_date
+            last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -587,8 +585,6 @@ def store_stock_daily_data(data_list):
             volume = EXCLUDED.volume,
             high = EXCLUDED.high,
             low = EXCLUDED.low,
-            all_time_high = EXCLUDED.all_time_high,
-            ath_percentage = EXCLUDED.ath_percentage,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 
