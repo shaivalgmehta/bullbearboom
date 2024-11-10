@@ -35,10 +35,10 @@ def update_screener_table_usd(selected_date=None):
             # Step 2: Insert latest daily data (today or yesterday)
             cur.execute("""
                 INSERT INTO crypto_screener_table (
-                    datetime, stock, crypto_name, close, ema, ema_rank, price_change_3m, price_change_6m, price_change_12m
+                    datetime, stock, crypto_name, close, ema, ema_rank, price_change_3m, price_change_6m, price_change_12m, all_time_high, ath_percentage
                 )
                 SELECT DISTINCT ON (stock)
-                    datetime, stock, crypto_name, close, ema, ema_rank, price_change_3m, price_change_6m, price_change_12m
+                    datetime, stock, crypto_name, close, ema, ema_rank, price_change_3m, price_change_6m, price_change_12m, all_time_high, ath_percentage
                 FROM 
                     crypto_daily_table
                 WHERE 

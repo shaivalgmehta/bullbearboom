@@ -33,7 +33,7 @@ def get_table_name(base):
 
 
 def fetch_stock_list_polygon():
-    url = f"https://api.polygon.io/v3/reference/tickers?market=crypto&active=true&apiKey={POLYGON_API_KEY}"
+    url = f"https://api.polygon.io/v3/reference/tickers?ticker=X:BTCUSD&market=crypto&active=true&apiKey={POLYGON_API_KEY}"
     all_tickers = []
     
     while url:
@@ -393,6 +393,47 @@ def fetch_force_index_data(symbol: str, db_params: Dict[str, Any], end_date: dat
     return df[['force_index', 'close', 'volume']].reset_index().rename(columns={'datetime': 't'}).dropna().to_dict('records')
 
 
+def fetch_all_time_high(symbol: str, db_params: Dict[str, Any], end_date: datetime, base: str = 'USD') -> Dict[str, float]:
+    """
+    Calculate the All-Time High price for a crypto over the last 3 years
+    Returns ATH and ATH percentage based on current price
+    """
+    table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+    
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            # Get ATH from the last 3 years
+            cur.execute(f"""
+                SELECT MAX(high) as ath,
+                       (SELECT high 
+                        FROM {table_name}
+                        WHERE stock = %s
+                        AND DATE(datetime) = DATE(%s)
+                        LIMIT 1) as current_price
+                FROM {table_name}
+                WHERE stock = %s
+                AND datetime >= %s - INTERVAL '3 years'
+                AND datetime <= %s
+            """, (symbol, end_date, symbol, end_date, end_date))
+            
+            result = cur.fetchone()
+            if result and result[0] is not None and result[1] is not None:
+                ath = float(result[0])
+                current_price = float(result[1])
+                ath_percentage = (current_price / ath) if ath > 0 else None
+                return {
+                    'all_time_high': ath,
+                    'ath_percentage': ath_percentage
+                }
+            return {
+                'all_time_high': None,
+                'ath_percentage': None
+            }
+    finally:
+        conn.close()
+
+
 ######################### DEFINE FUNCTIONS TO STORE DATA IN TIMESCALE DB #############################
 
 def store_force_index_data(data, symbol, base: str = 'USD'):
@@ -475,6 +516,8 @@ def store_stock_data(data, base: str = 'USD'):
         data['volume'],
         data['high'],
         data['low'],
+        data['all_time_high'],
+        data['ath_percentage'],
         data['price_change_3m'],
         data['price_change_6m'],
         data['price_change_12m'],
@@ -483,7 +526,9 @@ def store_stock_data(data, base: str = 'USD'):
 
     execute_values(cur, f"""
         INSERT INTO {table_name} (
-            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, price_change_3m, price_change_6m, price_change_12m, last_modified_date
+            datetime, stock, stock_name, crypto_name, ema, open, close, volume, high, low, 
+            all_time_high, ath_percentage, price_change_3m, price_change_6m, price_change_12m, 
+            last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -494,6 +539,8 @@ def store_stock_data(data, base: str = 'USD'):
             volume = EXCLUDED.volume,
             high = EXCLUDED.high,
             low = EXCLUDED.low,
+            all_time_high = EXCLUDED.all_time_high,
+            ath_percentage = EXCLUDED.ath_percentage,
             price_change_3m = EXCLUDED.price_change_3m,
             price_change_6m = EXCLUDED.price_change_6m,
             price_change_12m = EXCLUDED.price_change_12m,            
@@ -509,7 +556,6 @@ def store_stock_daily_data(data_list):
     conn = psycopg2.connect(**db_params)
     cur = conn.cursor()
 
-    # Prepare the values list for bulk insert
     values = [
         (
             data['datetime'],
@@ -521,15 +567,17 @@ def store_stock_daily_data(data_list):
             data['volume'],
             data['high'],
             data['low'],
+            data.get('all_time_high'),
+            data.get('ath_percentage'),
             datetime.now(timezone.utc)
         )
         for data in data_list
     ]
 
-    # Perform bulk upsert
     execute_values(cur, """
         INSERT INTO crypto_daily_table (
-            datetime, stock, stock_name, crypto_name, open, close, volume, high, low, last_modified_date
+            datetime, stock, stock_name, crypto_name, open, close, volume, high, low,
+            all_time_high, ath_percentage, last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             stock_name = EXCLUDED.stock_name,
@@ -539,6 +587,8 @@ def store_stock_daily_data(data_list):
             volume = EXCLUDED.volume,
             high = EXCLUDED.high,
             low = EXCLUDED.low,
+            all_time_high = EXCLUDED.all_time_high,
+            ath_percentage = EXCLUDED.ath_percentage,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 

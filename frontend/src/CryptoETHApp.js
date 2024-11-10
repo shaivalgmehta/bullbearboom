@@ -24,6 +24,8 @@ const columnMap = {
   'crypto_name': 'Crypto Name',
   'close': 'Last Price',
   'ema': '200-EMA',
+  'all_time_high': '3Y ATH',
+  'ath_percentage': '% of ATH',  
   'williams_r': 'Williams %R',
   'williams_r_ema': 'Williams %R EMA',
   'williams_r_momentum_alert_state': 'Williams %R Momentum Alert',
@@ -44,12 +46,12 @@ const columnMap = {
 
 const numericalColumns = [
   'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'williams_r_rank', 'williams_r_ema_rank',
-  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m'
+  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m', 'all_time_high', 'ath_percentage'
 ];
 
 const filterColumns = [
   'close', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week', 'force_index_52_week', 'williams_r_rank', 'williams_r_ema_rank',
-  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank'
+  'force_index_7_week_rank', 'force_index_52_week_rank', 'ema_rank', 'ath_percentage'
 ];
 
 const alertStateOptions = ['$', '$$$', '-'];
@@ -79,6 +81,7 @@ const formatPercentage = (value) => {
 const formatColumnValue = (column, value) => {
   switch (column) {
     case 'close':
+    case 'all_time_high':      
       return formatCurrency(value);
     case 'ema':
     case 'williams_r':
@@ -97,6 +100,7 @@ const formatColumnValue = (column, value) => {
     case 'price_change_3m':
     case 'price_change_6m':
     case 'price_change_12m':
+    case 'ath_percentage':      
       return formatPercentage(value);      
     default:
       return value;

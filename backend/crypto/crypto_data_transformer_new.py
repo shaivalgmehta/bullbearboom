@@ -51,10 +51,7 @@ class CoreDataTransformer(BaseTransformer):
             stock_data = data['stock_data']
             technical_indicator = data['technical_indicator']
             price_changes = data.get('price_changes', {})
-
-            # close_price = technical_indicator['close']
-            # volume = technical_indicator['volume']
-            # adjusted_volume = volume * close_price
+            ath_data = data.get('ath_data', {})  # Get ATH data if available
    
             transformed_data = {
                 'datetime': technical_indicator['datetime'],
@@ -67,6 +64,8 @@ class CoreDataTransformer(BaseTransformer):
                 'volume': self._parse_numeric(technical_indicator['volume']),
                 'high': self._parse_numeric(technical_indicator['high']),
                 'low': self._parse_numeric(technical_indicator['low']),
+                'all_time_high': self._parse_numeric(ath_data.get('all_time_high')),
+                'ath_percentage': self._parse_numeric(ath_data.get('ath_percentage')),
                 'price_change_3m': self._parse_numeric(price_changes.get('price_change_3m')),
                 'price_change_6m': self._parse_numeric(price_changes.get('price_change_6m')),
                 'price_change_12m': self._parse_numeric(price_changes.get('price_change_12m'))

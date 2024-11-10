@@ -8,7 +8,7 @@ from psycopg2.extras import execute_values
 from psycopg2 import sql
 from datetime import datetime, timedelta
 from twelvedata import TDClient
-from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data, store_stock_daily_data
+from crypto_get_data_functions import fetch_stock_list_polygon, fetch_technical_indicators_polygon, fetch_williams_r_polygon, fetch_force_index_data, store_force_index_data, store_williams_r_data, store_stock_data, store_stock_daily_data, fetch_all_time_high
 from crypto_data_transformer_new import get_transformer
 from crypto_conversion_process import run_crypto_conversion_process
 from get_crypto_data import run_crypto_data_process
@@ -109,12 +109,16 @@ def process_stock(stock, base, end_date):
         
         # Calculate price changes using the current price
         price_changes = fetch_price_changes(symbol, end_date, current_price, db_params, base)
+
+        # Get ATH data for the last 3 years
+        ath_data = fetch_all_time_high(symbol, db_params, end_date, base)
         
         # Combine data for daily table
         combined_data = {
             'stock_data': stock,
             'technical_indicator': technical_indicator,
-            'price_changes': price_changes
+            'price_changes': price_changes,
+            'ath_data': ath_data
         }
         
         # Transform the data for daily table
