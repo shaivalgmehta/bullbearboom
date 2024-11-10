@@ -33,7 +33,7 @@ def get_table_name(base):
 
 
 def fetch_stock_list_polygon():
-    url = f"https://api.polygon.io/v3/reference/tickers?ticker=X:BTCUSD&market=crypto&active=true&apiKey={POLYGON_API_KEY}"
+    url = f"https://api.polygon.io/v3/reference/tickers?market=crypto&active=true&apiKey={POLYGON_API_KEY}"
     all_tickers = []
     
     while url:
