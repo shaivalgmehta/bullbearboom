@@ -24,6 +24,7 @@ def process_alerts_for_base(base, date):
     table_suffix = f"_{base.lower()}" if base.lower() != "usd" else ""
     alerts_table = f"crypto_alerts_table{table_suffix}"
     weekly_table = f"crypto_weekly_table{table_suffix}"
+    daily_table = f"crypto_daily_table{table_suffix}"
     
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -45,6 +46,7 @@ def process_alerts_for_base(base, date):
                 WHERE DATE(w.datetime) = DATE(%s)
                 AND w.williams_r_momentum_alert_state = '$$$'
                 AND w.force_index_alert_state = '$$$'
+                AND LOWER(w.stock) LIKE '%%usd%%'
             """, (date,))
             
             alerts = cur.fetchall()
