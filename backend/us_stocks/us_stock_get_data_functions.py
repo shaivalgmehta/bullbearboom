@@ -41,7 +41,7 @@ td = TDClient(apikey=TWELVE_DATA_API_KEY)
 
 ######################### DEFINE FUNCTIONS TO FETCH DATA FROM TWELVE DATA #############################
 def fetch_stock_list_twelve_data():
-    url = f"https://api.twelvedata.com/stocks?country=United States&type=Common Stock&exchange=NASDAQ&apikey={TWELVE_DATA_API_KEY}"
+    url = f"https://api.twelvedata.com/stocks?country=United States&type=Common Stock&exchange=NYSE&apikey={TWELVE_DATA_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json().get('data', [])

@@ -770,7 +770,8 @@ def get_insider_stats(insider_name):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        query = """
+        # Get summary statistics
+        stats_query = """
             SELECT 
                 COUNT(*) FILTER (WHERE transaction_type = 'P') as total_purchases,
                 COUNT(*) FILTER (WHERE transaction_type = 'P' AND one_month_return > 0) as one_month_wins,
@@ -779,12 +780,32 @@ def get_insider_stats(insider_name):
                 AVG(three_month_return) FILTER (WHERE transaction_type = 'P') as avg_three_month_return
             FROM us_insider_trading_table
             WHERE insider_name = %s
-              AND one_month_return IS NOT NULL  -- Ensure we only count completed trades
+              AND one_month_return IS NOT NULL
               AND three_month_return IS NOT NULL
         """
         
-        cur.execute(query, (insider_name,))
+        cur.execute(stats_query, (insider_name,))
         stats = cur.fetchone()
+
+        # Get all purchase transactions
+        transactions_query = """
+            SELECT 
+                datetime,
+                stock,
+                stock_name,
+                shares_traded,
+                price_per_share,
+                total_value,
+                one_month_return,
+                three_month_return
+            FROM us_insider_trading_table
+            WHERE insider_name = %s
+            AND transaction_type = 'P'
+            ORDER BY datetime DESC
+        """
+        
+        cur.execute(transactions_query, (insider_name,))
+        transactions = cur.fetchall()
         
         if not stats:
             return jsonify({
@@ -793,11 +814,14 @@ def get_insider_stats(insider_name):
 
         response = {
             "insiderName": insider_name,
-            "totalPurchases": stats['total_purchases'],
-            "oneMonthWins": stats['one_month_wins'],
-            "avgOneMonthReturn": float(stats['avg_one_month_return']) if stats['avg_one_month_return'] else 0,
-            "threeMonthWins": stats['three_month_wins'],
-            "avgThreeMonthReturn": float(stats['avg_three_month_return']) if stats['avg_three_month_return'] else 0
+            "stats": {
+                "totalPurchases": stats['total_purchases'],
+                "oneMonthWins": stats['one_month_wins'],
+                "avgOneMonthReturn": float(stats['avg_one_month_return']) if stats['avg_one_month_return'] else 0,
+                "threeMonthWins": stats['three_month_wins'],
+                "avgThreeMonthReturn": float(stats['avg_three_month_return']) if stats['avg_three_month_return'] else 0
+            },
+            "transactions": transactions
         }
         
         cur.close()
