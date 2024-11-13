@@ -59,34 +59,122 @@ def get_db_connection():
 def get_latest_stock_data():
     logging.info("Fetching latest data for all stocks")
     try:
-        # Get date parameter, default to yesterday if not provided
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 100))
+        sort_column = request.args.get('sortColumn', 'datetime')
+        sort_direction = request.args.get('sortDirection', 'DESC')
+        
+        # Get date parameter
         date_str = request.args.get('date')
         if date_str:
             selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         else:
             selected_date = datetime.now().date() - timedelta(days=1)
-        # print(f{selected_date})
+
+        # Get filter parameters
+        filters = {}
+        text_filters = ['stock', 'stock_name']
+        numeric_filters = [
+            'market_cap', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio',
+            'current_quarter_sales', 'current_quarter_ebitda', 'ema',
+            'price_change_3m', 'price_change_6m', 'price_change_12m'
+        ]
+        alert_filters = [
+            'williams_r_momentum_alert_state',
+            'force_index_alert_state',
+            'anchored_obv_alert_state'
+        ]
+
+        # Process text filters
+        for column in text_filters:
+            value = request.args.get(column)
+            if value:
+                filters[column] = value.lower()
+
+        # Process numeric filters
+        for column in numeric_filters:
+            min_value = request.args.get(f'min_{column}')
+            max_value = request.args.get(f'max_{column}')
+            if min_value or max_value:
+                filters[column] = {
+                    'min': float(min_value) if min_value else None,
+                    'max': float(max_value) if max_value else None
+                }
+
+        # Process alert state filters
+        for column in alert_filters:
+            values = request.args.getlist(f'{column}[]')
+            if values:
+                filters[column] = values
+
+        # Calculate offset
+        offset = (page - 1) * page_size
+
+        # Build the WHERE clause dynamically
+        where_conditions = ["DATE(datetime) = DATE(%s)"]
+        params = [selected_date]
+
+        # Add text filters
+        for column, value in filters.items():
+            if column in text_filters:
+                where_conditions.append(f"LOWER({column}) LIKE %s")
+                params.append(f"%{value}%")
+            elif column in numeric_filters and isinstance(value, dict):
+                if value.get('min') is not None:
+                    where_conditions.append(f"{column} >= %s")
+                    params.append(value['min'])
+                if value.get('max') is not None:
+                    where_conditions.append(f"{column} <= %s")
+                    params.append(value['max'])
+            elif column in alert_filters:
+                if value:
+                    placeholders = ','.join(['%s'] * len(value))
+                    where_conditions.append(f"{column} IN ({placeholders})")
+                    params.extend(value)
+
+        where_clause = " AND ".join(where_conditions)
+
         # Update screener table for the selected date
         update_screener_table(selected_date)
         
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get total count
+        count_query = f"""
+            SELECT COUNT(*) 
+            FROM us_screener_table 
+            WHERE {where_clause}
+        """
+        cur.execute(count_query, params)
+        total_count = cur.fetchone()['count']
         
-        query = """
+        # Get paginated data
+        query = f"""
             SELECT *
             FROM us_screener_table
-            WHERE DATE(datetime) = %s
-            ORDER BY stock
+            WHERE {where_clause}
+            ORDER BY {sort_column} {sort_direction}
+            LIMIT %s OFFSET %s
         """
-        
-        cur.execute(query, (selected_date,))
+        cur.execute(query, params + [page_size, offset])
         data = cur.fetchall()
         
-        logging.info(f"Fetched data for {len(data)} stocks for date {selected_date}")
+        response = {
+            'data': data,
+            'totalCount': total_count,
+            'page': page,
+            'pageSize': page_size,
+            'totalPages': -(-total_count // page_size)  # Ceiling division
+        }
+        
+        logging.info(f"Fetched page {page} of stock data for date {selected_date}")
         cur.close()
         conn.close()
         
-        return jsonify(data)
+        return jsonify(response)
+        
     except Exception as e:
         logging.error(f"Error fetching stock data: {e}")
         return jsonify({"error": str(e)}), 500
@@ -533,6 +621,192 @@ def get_crypto_historical_data_btc(symbol):
         
     except Exception as e:
         logging.error(f"Error fetching historical BTC base data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+############## INSIDER TRADING API ##############################################
+@app.route('/api/stocks/insider')
+def get_insider_trading_data():
+    logging.info("Fetching insider trading data")
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 100))
+        sort_column = request.args.get('sortColumn', 'datetime')
+        sort_direction = request.args.get('sortDirection', 'DESC')
+        
+        # Get filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        insider_name_filter = request.args.get('insider_name')
+        stock_filter = request.args.get('stock')
+        transaction_types = request.args.getlist('transaction_type[]')
+        min_shares = request.args.get('min_shares')
+        max_shares = request.args.get('max_shares')
+        min_total_value = request.args.get('min_total_value')
+        max_total_value = request.args.get('max_total_value')
+        min_one_month_return = request.args.get('min_one_month_return')
+        max_one_month_return = request.args.get('max_one_month_return')
+        min_three_month_return = request.args.get('min_three_month_return')
+        max_three_month_return = request.args.get('max_three_month_return')
+        
+        # Calculate offset
+        offset = (page - 1) * page_size
+
+        # Build the WHERE clause dynamically
+        where_conditions = []
+        params = []
+
+        if start_date and end_date:
+            where_conditions.append("DATE(datetime) BETWEEN %s AND %s")
+            params.extend([start_date, end_date])
+        
+        if insider_name_filter:
+            where_conditions.append("LOWER(insider_name) LIKE %s")
+            params.append(f"%{insider_name_filter.lower()}%")
+            
+        if stock_filter:
+            where_conditions.append("LOWER(stock) LIKE %s")
+            params.append(f"%{stock_filter.lower()}%")
+            
+        if transaction_types:
+            placeholders = ','.join(['%s'] * len(transaction_types))
+            where_conditions.append(f"transaction_type IN ({placeholders})")
+            params.extend(transaction_types)
+            
+        # Add numeric range filters
+        if min_shares:
+            where_conditions.append("shares_traded >= %s")
+            params.append(float(min_shares))
+        if max_shares:
+            where_conditions.append("shares_traded <= %s")
+            params.append(float(max_shares))
+            
+        if min_total_value:
+            where_conditions.append("total_value >= %s")
+            params.append(float(min_total_value))
+        if max_total_value:
+            where_conditions.append("total_value <= %s")
+            params.append(float(max_total_value))
+            
+        if min_one_month_return:
+            where_conditions.append("one_month_return >= %s")
+            params.append(float(min_one_month_return))
+        if max_one_month_return:
+            where_conditions.append("one_month_return <= %s")
+            params.append(float(max_one_month_return))
+            
+        if min_three_month_return:
+            where_conditions.append("three_month_return >= %s")
+            params.append(float(min_three_month_return))
+        if max_three_month_return:
+            where_conditions.append("three_month_return <= %s")
+            params.append(float(max_three_month_return))
+
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get total count for pagination
+        count_query = f"""
+            SELECT COUNT(*) 
+            FROM us_insider_trading_table 
+            WHERE {where_clause}
+        """
+        cur.execute(count_query, params)
+        total_count = cur.fetchone()['count']
+        
+        # Get paginated and filtered data
+        query = f"""
+            SELECT 
+                datetime,
+                stock,
+                stock_name,
+                insider_name,
+                transaction_type,
+                relationship_is_director,
+                relationship_is_officer,
+                relationship_is_ten_percent_owner,
+                relationship_is_other,
+                shares_traded,
+                price_per_share,
+                total_value,
+                shares_owned_following,
+                one_month_price,
+                three_month_price,
+                one_month_return,
+                three_month_return
+            FROM us_insider_trading_table
+            WHERE {where_clause}
+            ORDER BY {sort_column} {sort_direction}
+            LIMIT %s OFFSET %s
+        """
+        params.extend([page_size, offset])
+        cur.execute(query, params)
+        data = cur.fetchall()
+        
+        response = {
+            'data': data,
+            'totalCount': total_count,
+            'page': page,
+            'pageSize': page_size,
+            'totalPages': -(-total_count // page_size)  # Ceiling division
+        }
+        
+        logging.info(f"Fetched page {page} of insider trading records")
+        cur.close()
+        conn.close()
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logging.error(f"Error fetching insider trading data: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/stocks/insider/stats/<insider_name>')
+def get_insider_stats(insider_name):
+    logging.info(f"Fetching statistics for insider: {insider_name}")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        query = """
+            SELECT 
+                COUNT(*) FILTER (WHERE transaction_type = 'P') as total_purchases,
+                COUNT(*) FILTER (WHERE transaction_type = 'P' AND one_month_return > 0) as one_month_wins,
+                AVG(one_month_return) FILTER (WHERE transaction_type = 'P') as avg_one_month_return,
+                COUNT(*) FILTER (WHERE transaction_type = 'P' AND three_month_return > 0) as three_month_wins,
+                AVG(three_month_return) FILTER (WHERE transaction_type = 'P') as avg_three_month_return
+            FROM us_insider_trading_table
+            WHERE insider_name = %s
+              AND one_month_return IS NOT NULL  -- Ensure we only count completed trades
+              AND three_month_return IS NOT NULL
+        """
+        
+        cur.execute(query, (insider_name,))
+        stats = cur.fetchone()
+        
+        if not stats:
+            return jsonify({
+                "error": "No statistics found for this insider"
+            }), 404
+
+        response = {
+            "insiderName": insider_name,
+            "totalPurchases": stats['total_purchases'],
+            "oneMonthWins": stats['one_month_wins'],
+            "avgOneMonthReturn": float(stats['avg_one_month_return']) if stats['avg_one_month_return'] else 0,
+            "threeMonthWins": stats['three_month_wins'],
+            "avgThreeMonthReturn": float(stats['avg_three_month_return']) if stats['avg_three_month_return'] else 0
+        }
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logging.error(f"Error fetching insider statistics: {e}")
         return jsonify({"error": str(e)}), 500
         
 if __name__ == '__main__':

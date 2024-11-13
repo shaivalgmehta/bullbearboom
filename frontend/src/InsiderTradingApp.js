@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { CircularProgress } from '@mui/material';
-import { debounce } from 'lodash';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
@@ -14,250 +13,250 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { Link } from 'react-router-dom';
+import { debounce } from 'lodash';
+import InsiderStatsModal from './InsiderStatsModal';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const columnMap = {
   'stock': 'Stock',
-  'stock_name': 'Stock Name',
-  'market_cap': 'Market Cap',
-  'close': 'Last Day Closing Price',
-  'pe_ratio': 'P/E Ratio',
-  'ev_ebitda': 'EV/EBITDA',
-  'pb_ratio': 'P/B Ratio',
-  'peg_ratio': 'PEG Ratio',
-  'earnings_yield': 'Earnings Yield',
-  'book_to_price': 'B/P Ratio',
-  'last_quarter_sales': 'Last Quarter Sales',
-  'current_quarter_sales': 'Current Quarter Sales',
-  'sales_change_percent': 'Sales % Change',
-  'last_quarter_ebitda': 'Last Quarter EBITDA',
-  'current_quarter_ebitda': 'Current Quarter EBITDA',
-  'ebitda_change_percent': 'EBITDA % Change',
-  'free_cash_flow': 'Levered Free Cash Flow',
-  'ema': '200-EMA',
-  'williams_r': 'Williams %R',
-  'williams_r_ema': 'Williams %R EMA',
-  'williams_r_momentum_alert_state': 'Williams %R Momentum Alert',
-  'force_index_7_week': '7-Week Force Index',
-  'force_index_52_week': '52-Week Force Index',
-  'force_index_alert_state': 'Force Index Alert',
-  'anchored_obv_alert_state': 'Anchored OBV Alert',
-  'pe_ratio_rank': 'P/E Ratio Ranking',
-  'ev_ebitda_rank': 'EV/EBITDA Ranking',
-  'pb_ratio_rank': 'P/B Ratio Ranking',
-  'peg_ratio_rank': 'PEG Ratio Ranking',
-  'earnings_yield_rank': 'Earnings Yield Rank',
-  'book_to_price_rank': 'Book to Price Rank',
-  'price_change_3m': '3-Month Price Change',
-  'price_change_6m': '6-Month Price Change',
-  'price_change_12m': '12-Month Price Change',
-  'datetime': 'Time'
+  'stock_name': 'Company Name',
+  'insider_name': 'Insider Name',
+  'transaction_type': 'Transaction Type',
+  'relationship': 'Relationship',
+  'shares_traded': 'Shares Traded',
+  'price_per_share': 'Price/Share',
+  'total_value': 'Total Value',
+  'shares_owned_following': 'Shares Owned After',
+  'one_month_price': '1M Price',
+  'three_month_price': '3M Price',
+  'one_month_return': '1M Return',
+  'three_month_return': '3M Return',
+  'datetime': 'Transaction Date'
 };
 
 const numericalColumns = [
-  'market_cap', 'close', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 
-  'peg_ratio', 'current_quarter_sales', 'last_quarter_sales', 'current_quarter_ebitda',
-  'last_quarter_ebitda', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week',
-  'force_index_52_week', 'pe_ratio_rank', 'ev_ebitda_rank', 'pb_ratio_rank',
-  'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m',
-  'earnings_yield', 'book_to_price', 'earnings_yield_rank', 'book_to_price_rank'
+  'shares_traded',
+  'price_per_share',
+  'total_value',
+  'shares_owned_following',
+  'one_month_price',
+  'three_month_price',
+  'one_month_return',
+  'three_month_return'
 ];
 
 const filterColumns = [
   'stock',
-  'stock_name',
-  'market_cap',
-  'pe_ratio',
-  'ev_ebitda',
-  'pb_ratio',
-  'peg_ratio',
-  'current_quarter_sales',
-  'current_quarter_ebitda',
-  'ema',
-  'pe_ratio_rank',
-  'ev_ebitda_rank',
-  'pb_ratio_rank',
-  'peg_ratio_rank',
-  'earnings_yield_rank',
-  'book_to_price_rank'
+  'insider_name',
+  'shares_traded',
+  'total_value',
+  'one_month_return',
+  'three_month_return'
 ];
 
-const alertStateOptions = ['$', '$$$', '-'];
+const transactionTypes = [
+  { value: 'P', label: 'Purchase' },
+  { value: 'S', label: 'Sale' }
+];
+
 const drawerWidth = 300;
 
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
+  return new Intl.NumberFormat('en-US', { 
+    style: 'currency', 
     currency: 'USD',
-    maximumFractionDigits: 2
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2 
   }).format(value);
 };
 
-const formatRatio = (value) => {
+const formatNumber = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return Number(value).toFixed(2);
-};
-
-const formatRank = (value) => {
-  if (value === null || value === undefined) return 'N/A';
-  return Number(value).toFixed(0);
+  return new Intl.NumberFormat('en-US').format(value);
 };
 
 const formatPercentage = (value) => {
   if (value === null || value === undefined) return 'N/A';
-  return `${(Number(value) * 100).toFixed(2)}%`;
+  return `${(value * 100).toFixed(2)}%`;
 };
 
-const formatColumnValue = (column, value) => {
+const getRelationshipString = (trade) => {
+  const relationships = [];
+  if (trade.relationship_is_director) relationships.push('Director');
+  if (trade.relationship_is_officer) relationships.push('Officer');
+  if (trade.relationship_is_ten_percent_owner) relationships.push('10% Owner');
+  if (trade.relationship_is_other) relationships.push('Other');
+  return relationships.join(', ');
+};
+
+const formatTransactionType = (type) => {
+  switch (type) {
+    case 'P':
+      return 'Purchase';
+    case 'S':
+      return 'Sale';
+    default:
+      return type;
+  }
+};
+
+const formatColumnValue = (column, value, rowData) => {
   switch (column) {
-    case 'market_cap':
-    case 'current_quarter_sales':
-    case 'current_quarter_ebitda':
-    case 'last_quarter_sales':
-    case 'last_quarter_ebitda':
-    case 'free_cash_flow':
-    case 'close':
+    case 'price_per_share':
+    case 'one_month_price':
+    case 'three_month_price':
+    case 'total_value':
       return formatCurrency(value);
-    case 'pe_ratio':
-    case 'ev_ebitda':
-    case 'pb_ratio':
-    case 'peg_ratio':
-    case 'earnings_yield':
-    case 'book_to_price':      
-    case 'ema':
-    case 'williams_r':
-    case 'williams_r_ema':
-    case 'force_index_7_week':
-    case 'force_index_52_week':
-      return formatRatio(value);
-    case 'sales_change_percent':
-    case 'ebitda_change_percent':
-    case 'price_change_3m':
-    case 'price_change_6m':
-    case 'price_change_12m':
+    case 'shares_traded':
+    case 'shares_owned_following':
+      return formatNumber(value);
+    case 'one_month_return':
+    case 'three_month_return':
       return formatPercentage(value);
-    case 'pe_ratio_rank':
-    case 'ev_ebitda_rank':
-    case 'pb_ratio_rank':
-    case 'peg_ratio_rank':
-    case 'earnings_yield_rank':
-    case 'book_to_price_rank':      
-      return formatRank(value);
+    case 'relationship':
+      return getRelationshipString(rowData);
+    case 'transaction_type':
+      return formatTransactionType(value);
     case 'datetime':
-      return new Date(value).toLocaleString();
+      return new Date(value).toLocaleDateString();
     default:
       return value;
   }
 };
 
-function StockApp({ drawerOpen, toggleDrawer }) {
-  const [stockData, setStockData] = useState([]);
+function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
+  const [insiderData, setInsiderData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({});
-  const [selectedDate, setSelectedDate] = useState(
-    new Date(new Date().setDate(new Date().getDate() - 1))
-  );
-  const [alertStateFilters, setAlertStateFilters] = useState({
-    williams_r_momentum_alert_state: [],
-    force_index_alert_state: [],
-    anchored_obv_alert_state: []
-  });
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const [selectedTransactionTypes, setSelectedTransactionTypes] = useState([]);
+  const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 30)));
+  const [endDate, setEndDate] = useState(new Date());
+  const [sortConfig, setSortConfig] = useState({ key: 'datetime', direction: 'descending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
+  
+  const [selectedInsider, setSelectedInsider] = useState(null);
+  const [insiderStats, setInsiderStats] = useState(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState(null);
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Fetch insider statistics
+  const fetchInsiderStats = async (insiderName) => {
+    setIsStatsLoading(true);
+    setStatsError(null);
+    try {
+      const response = await axios.get(`${API_URL}/stocks/insider/stats/${encodeURIComponent(insiderName)}`);
+      setInsiderStats(response.data);
+    } catch (error) {
+      setStatsError(error.response?.data?.error || 'Failed to fetch insider statistics');
+      console.error('Error fetching insider stats:', error);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  };
+
+  // Handle insider name click
+  const handleInsiderClick = (insiderName) => {
+    setSelectedInsider(insiderName);
+    fetchInsiderStats(insiderName);
+  };
+
+  // Handle modal close
+  const handleModalClose = () => {
+    setSelectedInsider(null);
+    setInsiderStats(null);
+    setStatsError(null);
+  };
 
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const formattedDate = selectedDate.toISOString().split('T')[0];
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
       
       const params = new URLSearchParams({
-        date: formattedDate,
         page: page.toString(),
         pageSize: pageSize.toString(),
-        sortColumn: sortConfig.key || 'stock',
+        start_date: startDateStr,
+        end_date: endDateStr,
+        sortColumn: sortConfig.key || 'datetime',
         sortDirection: sortConfig.direction === 'ascending' ? 'ASC' : 'DESC'
       });
 
-      // Add all filters
       Object.entries(filters).forEach(([key, value]) => {
-        if (typeof value === 'string') {
-          params.append(key, value.toLowerCase());
-        } else if (value && typeof value === 'object') {
-          if (value.min !== undefined) params.append(`min_${key}`, value.min);
-          if (value.max !== undefined) params.append(`max_${key}`, value.max);
+        if (key === 'insider_name' || key === 'stock') {
+          if (value) params.append(key, value);
+        } else {
+          if (value.min) params.append(`min_${key}`, value.min);
+          if (value.max) params.append(`max_${key}`, value.max);
         }
       });
 
-      // Add alert state filters
-      Object.entries(alertStateFilters).forEach(([key, values]) => {
-        values.forEach(value => {
-          params.append(`${key}[]`, value);
+      if (selectedTransactionTypes.length > 0) {
+        selectedTransactionTypes.forEach(type => {
+          params.append('transaction_type[]', type);
         });
-      });
+      }
 
-      const result = await axios.get(`${API_URL}/stocks/latest?${params}`);
-      
-      setStockData(result.data.data);
+      const result = await axios.get(`${API_URL}/stocks/insider?${params}`);
+      setInsiderData(result.data.data);
       setTotalPages(result.data.totalPages);
       setTotalCount(result.data.totalCount);
     } catch (error) {
-      console.error("Error fetching stock data:", error);
+      console.error("Error fetching insider trading data:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, page, pageSize, sortConfig, filters, alertStateFilters]);
+  }, [page, pageSize, startDate, endDate, sortConfig, filters, selectedTransactionTypes]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const debouncedFetchData = useCallback(
     debounce(() => fetchData(), 300),
     [fetchData]
   );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleFilterChange = (column, value, type = null) => {
+  const handleFilterChange = (column, value, type) => {
     setPage(1);
-    if (type === null) {
+    if (column === 'insider_name' || column === 'stock') {
       setFilters(prevFilters => ({
         ...prevFilters,
-        [column]: value
+        [column]: value.toLowerCase()
       }));
     } else {
       setFilters(prevFilters => ({
         ...prevFilters,
-        [column]: { ...(prevFilters[column] || {}), [type]: value }
+        [column]: { ...prevFilters[column], [type]: value }
       }));
     }
     debouncedFetchData();
   };
 
-  const handleAlertStateFilterChange = (column, value) => {
+  const handleTransactionTypeChange = (type) => {
     setPage(1);
-    setAlertStateFilters(prevFilters => ({
-      ...prevFilters,
-      [column]: prevFilters[column].includes(value)
-        ? prevFilters[column].filter(v => v !== value)
-        : [...prevFilters[column], value]
-    }));
+    setSelectedTransactionTypes(prev => {
+      if (prev.includes(type)) {
+        return prev.filter(t => t !== type);
+      } else {
+        return [...prev, type];
+      }
+    });
     debouncedFetchData();
   };
 
   const clearFilters = () => {
     setFilters({});
-    setAlertStateFilters({
-      williams_r_momentum_alert_state: [],
-      force_index_alert_state: [],
-      anchored_obv_alert_state: []
-    });
+    setSelectedTransactionTypes([]);
     setPage(1);
     fetchData();
   };
@@ -284,9 +283,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
   };
 
-  const visibleColumns = Object.keys(columnMap).filter(
-    column => !hiddenColumns.includes(column)
-  );
+  const visibleColumns = Object.keys(columnMap).filter(column => !hiddenColumns.includes(column));
 
   const drawer = (
     <Box sx={{ p: 2 }}>
@@ -298,10 +295,18 @@ function StockApp({ drawerOpen, toggleDrawer }) {
           </Button>
         </Box>
         <DatePicker
-          label="Select Date"
-          value={selectedDate}
-          onChange={setSelectedDate}
-          maxDate={new Date(new Date().setDate(new Date().getDate() - 1))}
+          label="Start Date"
+          value={startDate}
+          onChange={setStartDate}
+          maxDate={endDate}
+          slotProps={{ textField: { size: "small", fullWidth: true } }}
+        />
+        <DatePicker
+          label="End Date"
+          value={endDate}
+          onChange={setEndDate}
+          minDate={startDate}
+          maxDate={new Date()}
           slotProps={{ textField: { size: "small", fullWidth: true } }}
         />
       </Box>
@@ -328,16 +333,36 @@ function StockApp({ drawerOpen, toggleDrawer }) {
           </Select>
         </ListItem>
 
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            Transaction Type
+          </Typography>
+          <FormGroup>
+            {transactionTypes.map((type) => (
+              <FormControlLabel
+                key={type.value}
+                control={
+                  <Checkbox
+                    checked={selectedTransactionTypes.includes(type.value)}
+                    onChange={() => handleTransactionTypeChange(type.value)}
+                  />
+                }
+                label={type.label}
+              />
+            ))}
+          </FormGroup>
+        </ListItem>
+
         {filterColumns.map((column) => (
           <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
               {columnMap[column]}
             </Typography>
-            {column === 'stock' || column === 'stock_name' ? (
+            {column === 'insider_name' || column === 'stock' ? (
               <TextField
                 fullWidth
                 size="small"
-                placeholder={`Filter ${columnMap[column]}`}
+                placeholder={`Filter by ${column === 'stock' ? 'symbol' : 'name'}`}
                 onChange={(e) => handleFilterChange(column, e.target.value)}
                 value={filters[column] || ''}
               />
@@ -363,28 +388,6 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                 </Grid>
               </Grid>
             )}
-          </ListItem>
-        ))}
-
-        {Object.entries(alertStateFilters).map(([column, selectedValues]) => (
-          <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-              {columnMap[column]}
-            </Typography>
-            <FormGroup>
-              {alertStateOptions.map((option) => (
-                <FormControlLabel
-                  key={option}
-                  control={
-                    <Checkbox
-                      checked={selectedValues.includes(option)}
-                      onChange={() => handleAlertStateFilterChange(column, option)}
-                    />
-                  }
-                  label={option}
-                />
-              ))}
-            </FormGroup>
           </ListItem>
         ))}
 
@@ -437,6 +440,17 @@ function StockApp({ drawerOpen, toggleDrawer }) {
       >
         {drawer}
       </Drawer>
+
+      {/* Insider Stats Modal */}
+      <InsiderStatsModal
+        open={Boolean(selectedInsider)}
+        onClose={handleModalClose}
+        insiderName={selectedInsider}
+        stats={insiderStats}
+        isLoading={isStatsLoading}
+        error={statsError}
+      />
+
       <Box
         component="main"
         sx={{
@@ -474,20 +488,19 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                   {visibleColumns.map((key) => (
                     <TableCell 
                       key={key}
-                      align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
+                      align={key === 'stock' || key === 'stock_name' || key === 'insider_name' ? "left" : "center"}
                       sx={{ 
                         whiteSpace: 'nowrap', 
                         padding: '8px 12px',
                         fontSize: '0.9rem',
                         fontWeight: 'bold',
-                        backgroundColor: '#f8f9fa',
-                        ...(key === 'stock_name' && { width: '200px' })
+                        backgroundColor: '#f8f9fa'
                       }}
                     >
                       <Box sx={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" 
+                        justifyContent: key === 'stock' || key === 'stock_name' || key === 'insider_name' ? "flex-start" : "center" 
                       }}>
                         {columnMap[key]}
                         {(numericalColumns.includes(key) || key === 'datetime') && (
@@ -509,9 +522,9 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {stockData.map((stock, index) => (
+                {insiderData.map((trade, index) => (
                   <TableRow 
-                    key={`${stock.stock}-${index}`} 
+                    key={`${trade.datetime}-${trade.stock}-${trade.insider_name}-${index}`} 
                     hover
                     sx={{
                       '&:nth-of-type(odd)': {
@@ -522,7 +535,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                     {visibleColumns.map((column) => (
                       <TableCell 
                         key={column}
-                        align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
+                        align={column === 'stock' || column === 'stock_name' || column === 'insider_name' ? "left" : "center"}
                         sx={{ 
                           whiteSpace: 'nowrap', 
                           padding: '8px 12px',
@@ -531,12 +544,15 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                             maxWidth: '200px',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis'
+                          }),
+                          ...(column === 'transaction_type' && {
+                            color: trade[column] === 'P' ? '#4caf50' : '#f44336'
                           })
                         }}
                       >
                         {column === 'stock' ? (
                           <Link 
-                            to={`/stock/${stock[column]}`}
+                            to={`/stock/${trade[column]}`}
                             style={{ 
                               color: '#1976d2', 
                               textDecoration: 'none',
@@ -545,20 +561,37 @@ function StockApp({ drawerOpen, toggleDrawer }) {
                               }
                             }}
                           >
-                            {formatColumnValue(column, stock[column])}
+                            {formatColumnValue(column, trade[column], trade)}
                           </Link>
+                        ) : column === 'insider_name' ? (
+                          <Button
+                            onClick={() => handleInsiderClick(trade[column])}
+                            sx={{
+                              padding: 0,
+                              textTransform: 'none',
+                              fontWeight: 'normal',
+                              fontSize: '0.85rem',
+                              color: 'primary.main',
+                              '&:hover': {
+                                backgroundColor: 'transparent',
+                                textDecoration: 'underline'
+                              }
+                            }}
+                          >
+                            {formatColumnValue(column, trade[column], trade)}
+                          </Button>
                         ) : column === 'stock_name' ? (
-                          <Tooltip title={stock[column]} placement="top">
-                            <span>{formatColumnValue(column, stock[column])}</span>
+                          <Tooltip title={trade[column]} placement="top">
+                            <span>{formatColumnValue(column, trade[column], trade)}</span>
                           </Tooltip>
-                        ) : ['price_change_3m', 'price_change_6m', 'price_change_12m'].includes(column) ? (
+                        ) : column === 'one_month_return' || column === 'three_month_return' ? (
                           <span style={{ 
-                            color: stock[column] > 0 ? '#4caf50' : stock[column] < 0 ? '#f44336' : 'inherit'
+                            color: trade[column] > 0 ? '#4caf50' : trade[column] < 0 ? '#f44336' : 'inherit'
                           }}>
-                            {formatColumnValue(column, stock[column])}
+                            {formatColumnValue(column, trade[column], trade)}
                           </span>
                         ) : (
-                          formatColumnValue(column, stock[column])
+                          formatColumnValue(column, trade[column], trade)
                         )}
                       </TableCell>
                     ))}
@@ -619,4 +652,4 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   );
 }
 
-export default StockApp;
+export default InsiderTradingApp;

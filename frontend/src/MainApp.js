@@ -11,6 +11,8 @@ import CryptoBTCApp from './CryptoBTCApp';
 import CryptoAlertsApp from './CryptoAlertsApp';
 import StockDetailApp from './StockDetailApp/StockDetailApp';
 import CryptoDetailApp from './CryptoDetailApp/CryptoDetailApp';
+import InsiderTradingApp from './InsiderTradingApp';
+
 
 function MainApp() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -90,7 +92,9 @@ function MainApp() {
             <Button color="inherit" component={Link} to="/us_stocks">
               Stocks
             </Button>
-            
+            <Button color="inherit" component={Link} to="/insider_trading">
+              Insider Trading
+            </Button>            
             {/* Crypto Menu */}
             <Box>
               <Button 
@@ -143,6 +147,7 @@ function MainApp() {
             <Route path="crypto/:symbol" element={<CryptoDetailApp />} />
             <Route path="crypto_eth/:symbol" element={<CryptoDetailApp />} />
             <Route path="crypto_btc/:symbol" element={<CryptoDetailApp />} />
+            <Route path="insider_trading" element={<InsiderTradingApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
           </Routes>
         </Box>
       </Box>

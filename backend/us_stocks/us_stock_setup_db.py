@@ -69,7 +69,37 @@ def setup_database():
                 price_change_6m NUMERIC,
                 price_change_12m NUMERIC,                
                 CONSTRAINT us_screener_pkey PRIMARY KEY (datetime, stock)
+            """)
 
+            # Create insider trading table
+            create_table(cur, 'us_insider_trading_table', """
+                datetime TIMESTAMPTZ NOT NULL,
+                stock TEXT NOT NULL,
+                stock_name TEXT,
+                insider_name TEXT,
+                insider_title TEXT,
+                officer_title TEXT,
+                transaction_type TEXT,
+                shares_traded NUMERIC,
+                price_per_share NUMERIC,
+                total_value NUMERIC,
+                one_month_price NUMERIC,
+                three_month_price NUMERIC,
+                one_month_date TIMESTAMPTZ,
+                three_month_date TIMESTAMPTZ,
+                one_month_return NUMERIC,
+                three_month_return NUMERIC,
+                filing_date TIMESTAMPTZ,
+                relationship_is_director BOOLEAN,
+                relationship_is_officer BOOLEAN,
+                relationship_is_ten_percent_owner BOOLEAN,
+                relationship_is_other BOOLEAN,
+                form_type TEXT,
+                shares_owned_following NUMERIC,
+                sec_link TEXT,
+                transaction_id TEXT,
+                last_modified_date TIMESTAMPTZ NOT NULL,
+                CONSTRAINT us_insider_trading_pkey PRIMARY KEY (datetime, stock, shares_traded, transaction_type, transaction_id, price_per_share, shares_owned_following)
             """)
 
             create_table(cur, 'us_alerts_table', """
@@ -80,7 +110,6 @@ def setup_database():
                 anchored_obv_alert_state TEXT,
                 CONSTRAINT us_alerts_pkey PRIMARY KEY (datetime, stock)
             """)
-
 
             # Create US daily time series table
             create_table(cur, 'us_daily_table', """
@@ -113,7 +142,6 @@ def setup_database():
                 CONSTRAINT us_daily_pkey PRIMARY KEY (datetime, stock)
             """)
 
-
             # Create US weekly time series table
             create_table(cur, 'us_weekly_table', """
                 datetime TIMESTAMPTZ NOT NULL,
@@ -133,7 +161,6 @@ def setup_database():
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT us_weekly_pkey PRIMARY KEY (datetime, stock)
             """)
-
 
             # Create US quarterly data table
             create_table(cur, 'us_quarterly_table', """
@@ -155,7 +182,8 @@ def setup_database():
                 'us_alerts_table': ['stock'],
                 'us_daily_table': ['stock'],
                 'us_weekly_table': ['stock'],
-                'us_quarterly_table': ['stock']
+                'us_quarterly_table': ['stock'],
+                'us_insider_trading_table': ['stock', 'insider_name', 'transaction_type', 'total_value', 'officer_title']
             }.items():
                 for column in columns:
                     create_index(cur, table, column)
