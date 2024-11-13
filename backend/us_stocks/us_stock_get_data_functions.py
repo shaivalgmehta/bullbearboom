@@ -41,12 +41,41 @@ td = TDClient(apikey=TWELVE_DATA_API_KEY)
 
 ######################### DEFINE FUNCTIONS TO FETCH DATA FROM TWELVE DATA #############################
 def fetch_stock_list_twelve_data():
-    url = f"https://api.twelvedata.com/stocks?country=United States&type=Common Stock&exchange=NYSE&apikey={TWELVE_DATA_API_KEY}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json().get('data', [])
-    else:
-        raise Exception(f"Error fetching stock list: {response.status_code}")
+    """
+    Fetch stock list from both NYSE and NASDAQ exchanges using separate API calls.
+    Combines the results into a single list.
+    """
+    all_stocks = []
+    
+    # List of exchanges to query
+    exchanges = ['NYSE', 'NASDAQ']
+    
+    for exchange in exchanges:
+        try:
+            url = f"https://api.twelvedata.com/stocks?country=United States&type=Common Stock&exchange={exchange}&apikey={TWELVE_DATA_API_KEY}"
+            response = requests.get(url)
+            
+            if response.status_code == 200:
+                stocks = response.json().get('data', [])
+                all_stocks.extend(stocks)
+                print(f"Successfully fetched {len(stocks)} stocks from {exchange}")
+            else:
+                print(f"Error fetching {exchange} stocks: {response.status_code}")
+                
+            # Add a small delay between requests to avoid rate limiting
+            time.sleep(0.1)
+            
+        except Exception as e:
+            print(f"Error fetching data from {exchange}: {str(e)}")
+    
+    if not all_stocks:
+        raise Exception("Failed to fetch stocks from both exchanges")
+    
+    # Remove any potential duplicates (in case a stock is listed on both exchanges)
+    unique_stocks = {stock['symbol']: stock for stock in all_stocks}.values()
+    
+    print(f"Total unique stocks fetched: {len(unique_stocks)}")
+    return list(unique_stocks)
 
 def fetch_stock_statistics_twelve_data(symbol):
     statistics = td.get_statistics(symbol=symbol, country="United States").as_json()
