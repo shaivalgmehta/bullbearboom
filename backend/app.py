@@ -211,7 +211,6 @@ def get_stock_historical_data(symbol):
         end_date = request.args.get('end_date')
         
         if not start_date or not end_date:
-            # Default to last month if no dates provided
             end_date = datetime.now().date()
             start_date = end_date - timedelta(days=30)
         else:
@@ -221,8 +220,8 @@ def get_stock_historical_data(symbol):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Query for both force index and Williams %R data
-        query = """
+        # Query for technical indicators (existing)
+        cur.execute("""
             SELECT 
                 datetime,
                 force_index_7_week,
@@ -233,12 +232,55 @@ def get_stock_historical_data(symbol):
             WHERE stock = %s
             AND datetime BETWEEN %s AND %s
             ORDER BY datetime ASC
-        """
+        """, (symbol, start_date, end_date))
         
-        cur.execute(query, (symbol, start_date, end_date))
-        data = cur.fetchall()
+        technical_data = cur.fetchall()
         
-        # Also fetch basic stock info
+        # Query for price history
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                ema
+            FROM us_daily_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        price_history = cur.fetchall()
+
+        # Get latest daily data
+        cur.execute("""
+            SELECT 
+                datetime,
+                close,
+                market_cap,
+                pe_ratio,
+                ev_ebitda,
+                pb_ratio,
+                peg_ratio,
+                price_change_3m,
+                price_change_6m,
+                price_change_12m,
+                ema,
+                volume,
+                high,
+                low,
+                open
+            FROM us_daily_table
+            WHERE stock = %s
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, (symbol,))
+        
+        current_data = cur.fetchone()
+        
+        # Also fetch basic stock info (existing)
         cur.execute("""
             SELECT DISTINCT stock_name
             FROM us_daily_table
@@ -250,7 +292,7 @@ def get_stock_historical_data(symbol):
         cur.close()
         conn.close()
         
-        if not data:
+        if not technical_data and not price_history:
             return jsonify({
                 "error": f"No data found for stock {symbol}"
             }), 404
@@ -258,7 +300,9 @@ def get_stock_historical_data(symbol):
         return jsonify({
             "symbol": symbol,
             "stock_name": stock_info['stock_name'] if stock_info else None,
-            "data": data
+            "current_data": current_data,
+            "technical_data": technical_data,
+            "price_history": price_history
         })
         
     except Exception as e:

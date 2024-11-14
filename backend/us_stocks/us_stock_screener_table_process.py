@@ -34,12 +34,12 @@ def update_screener_table(selected_date=None):
             # Step 2: Insert latest daily data (today or yesterday)
             cur.execute("""
                 INSERT INTO us_screener_table (
-                    datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema, pe_ratio_rank,
+                    datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
                 ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
                 price_change_3m, price_change_6m, price_change_12m
                 )
                 SELECT DISTINCT ON (stock)
-                    datetime, stock, stock_name, close, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, ema, pe_ratio_rank,
+                    datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
                 ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
                 price_change_3m, price_change_6m, price_change_12m
                 FROM 
@@ -88,6 +88,8 @@ def update_screener_table(selected_date=None):
                         MAX(CASE WHEN rn = 1 THEN free_cash_flow END) as free_cash_flow,
                         MAX(CASE WHEN rn = 1 THEN discounted_cash_flow END) as discounted_cash_flow,
                         -- New fields
+                        MAX(CASE WHEN rn = 1 THEN market_cap END) as market_cap,
+                        MAX(CASE WHEN rn = 1 THEN ev_ebitda END) as ev_ebitda,                        
                         MAX(CASE WHEN rn = 1 THEN return_on_equity END) as return_on_equity,
                         MAX(CASE WHEN rn = 1 THEN return_on_assets END) as return_on_assets,
                         MAX(CASE WHEN rn = 1 THEN price_to_sales END) as price_to_sales,
@@ -128,6 +130,8 @@ def update_screener_table(selected_date=None):
                     free_cash_flow = lq.free_cash_flow,
                     discounted_cash_flow = lq.discounted_cash_flow,
                     -- Set new fields
+                    market_cap = lq.market_cap,
+                    ev_ebitda = lq.ev_ebitda,            
                     return_on_equity = lq.return_on_equity,
                     return_on_assets = lq.return_on_assets,
                     price_to_sales = lq.price_to_sales,

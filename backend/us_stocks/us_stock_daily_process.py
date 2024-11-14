@@ -91,8 +91,6 @@ def process_stock(stock, end_date):
     symbol = stock['symbol']
     
     try:
-        # Fetch statistics data
-        statistics = fetch_stock_statistics_twelve_data(symbol)
 
         # Fetch technical indicators
         technical_indicator = fetch_technical_indicators_twelve_data(
@@ -109,11 +107,9 @@ def process_stock(stock, end_date):
         # Combine whatever data we have
         combined_data = {
             'stock_data': stock,
-            'statistics': statistics,
             'technical_indicator': technical_indicator if technical_indicator is not None else [],
             'price_changes': price_changes
         }
-
         # Transform the data for daily table
         stock_transformed_data = stock_data_transformer.transform(combined_data)[0]
         # print(f'{stock_transformed_data}')
@@ -144,7 +140,7 @@ def main():
 ##################### Run statistics and EMA process ################################
       # Get the appropriate transformers
     global stock_data_transformer
-    stock_data_transformer = get_transformer('core_data')
+    stock_data_transformer = get_transformer('core_data', db_params)
   
     # Process stocks in batches of 10
     batch_size = 11

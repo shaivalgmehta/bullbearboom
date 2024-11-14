@@ -57,11 +57,6 @@ const columnMap = {
   'peg_ratio_rank': 'PEG Ratio Ranking',
   'earnings_yield_rank': 'Earnings Yield Rank',
   'book_to_price_rank': 'Book to Price Rank',
-  'return_on_equity_rank': 'ROE Rank',
-  'return_on_assets_rank': 'ROA Rank',
-  'price_to_sales_rank': 'P/S Rank',
-  'free_cash_flow_yield_rank': 'FCF Yield Rank',
-  'shareholder_yield_rank': 'Shareholder Yield Rank',
   'datetime': 'Time'
 };
 
@@ -73,9 +68,7 @@ const numericalColumns = [
   'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m',
   'earnings_yield', 'book_to_price', 'earnings_yield_rank', 'book_to_price_rank', 
   'return_on_equity', 'return_on_assets', 'price_to_sales',
-  'free_cash_flow_yield', 'shareholder_yield',
-  'return_on_equity_rank', 'return_on_assets_rank', 'price_to_sales_rank',
-  'free_cash_flow_yield_rank', 'shareholder_yield_rank'
+  'free_cash_flow_yield', 'shareholder_yield'
 ];
 
 const filterColumns = [
@@ -166,12 +159,7 @@ const formatColumnValue = (column, value) => {
     case 'pb_ratio_rank':
     case 'peg_ratio_rank':
     case 'earnings_yield_rank':
-    case 'book_to_price_rank':
-    case 'return_on_equity_rank':
-    case 'return_on_assets_rank':
-    case 'price_to_sales_rank':
-    case 'free_cash_flow_yield_rank':
-    case 'shareholder_yield_rank':      
+    case 'book_to_price_rank':    
       return formatRank(value);
     case 'datetime':
       return new Date(value).toLocaleString();

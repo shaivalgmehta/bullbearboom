@@ -154,21 +154,21 @@ def main():
         print(f"Finished processing batch. Moving to next batch.\n")
 
     # After processing all stocks, update rankings for the most recent date
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT DISTINCT DATE(datetime)
-                FROM us_quarterly_table
-                ORDER BY DATE(datetime) DESC
-                LIMIT 1
-            """)
-            latest_date = cur.fetchone()
+    # with get_db_connection() as conn:
+    #     with conn.cursor() as cur:
+    #         cur.execute("""
+    #             SELECT DISTINCT DATE(datetime)
+    #             FROM us_quarterly_table
+    #             ORDER BY DATE(datetime) DESC
+    #             LIMIT 1
+    #         """)
+    #         latest_date = cur.fetchone()
             
-            if latest_date:
-                update_quarterly_rankings(latest_date[0])
-                print(f"Updated rankings for date: {latest_date[0]}")
-            else:
-                print("No data found in quarterly table")
+    #         if latest_date:
+    #             update_quarterly_rankings(latest_date[0])
+    #             print(f"Updated rankings for date: {latest_date[0]}")
+    #         else:
+    #             print("No data found in quarterly table")
 
     print("All stocks have been processed.")
 

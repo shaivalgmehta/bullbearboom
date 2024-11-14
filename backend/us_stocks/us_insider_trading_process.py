@@ -15,7 +15,7 @@ def main():
     end_date = datetime.now().strftime('%Y-%m-%d')
 
     # end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    start_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
     
     print(f"Fetching insider trades from {start_date} to {end_date}")
     

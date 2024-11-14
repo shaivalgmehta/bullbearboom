@@ -499,61 +499,67 @@ def store_stock_data(data):
         password=DB_PASSWORD
     )
     cur = conn.cursor()
-
-    values = [(
-        data['datetime'],
-        data['stock'],
-        data['stock_name'],
-        data['ema'],
-        data['open'],
-        data['close'],
-        data['volume'],
-        data['high'],
-        data['low'],
-        data['market_cap'],
-        data['pe_ratio'],
-        data['ev_ebitda'],
-        data['pb_ratio'],
-        data['peg_ratio'],
-        data['price_change_3m'],
-        data['price_change_6m'],
-        data['price_change_12m'],
-        data['earnings_yield'],
-        data['book_to_price'],                 
-        datetime.now(timezone.utc)
-    )]
-
-    execute_values(cur, """
-        INSERT INTO us_daily_table (
-            datetime, stock, stock_name, ema, open, close, volume, high, low, market_cap, pe_ratio, ev_ebitda, pb_ratio, peg_ratio, price_change_3m, price_change_6m, price_change_12m, earnings_yield, book_to_price, last_modified_date
-        ) VALUES %s
-        ON CONFLICT (datetime, stock) DO UPDATE SET
-            stock_name = EXCLUDED.stock_name,
-            ema = EXCLUDED.ema,
-            open = EXCLUDED.open,
-            close = EXCLUDED.close,
-            volume = EXCLUDED.volume,
-            high = EXCLUDED.high,
-            low = EXCLUDED.low,
-            market_cap = EXCLUDED.market_cap,
-            pe_ratio = EXCLUDED.pe_ratio,
-            ev_ebitda = EXCLUDED.ev_ebitda,
-            pb_ratio = EXCLUDED.pb_ratio,
-            peg_ratio = EXCLUDED.peg_ratio,
-            price_change_3m = EXCLUDED.price_change_3m,
-            price_change_6m = EXCLUDED.price_change_6m,
-            price_change_12m = EXCLUDED.price_change_12m,
-            earnings_yield = EXCLUDED.earnings_yield,
-            book_to_price = EXCLUDED.book_to_price,                
-            last_modified_date = EXCLUDED.last_modified_date
-    """, values)
-
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        values = [(
+            data['datetime'],
+            data['stock'],
+            data['stock_name'],
+            data['ema'],
+            data['open'],
+            data['close'],
+            data['volume'],
+            data['high'],
+            data['low'],
+            data['pe_ratio'],
+            data['pb_ratio'],
+            data['peg_ratio'],
+            data['price_change_3m'],
+            data['price_change_6m'],
+            data['price_change_12m'],
+            data['earnings_yield'],
+            data['book_to_price'],                 
+            datetime.now(timezone.utc)
+        )]
+        
+        execute_values(cur, """
+            INSERT INTO us_daily_table (
+                datetime, stock, stock_name, ema, open, close, volume, high, low, 
+                pe_ratio, pb_ratio, peg_ratio, 
+                price_change_3m, price_change_6m, price_change_12m, 
+                earnings_yield, book_to_price, last_modified_date
+            ) VALUES %s
+            ON CONFLICT (datetime, stock) DO UPDATE SET
+                stock_name = EXCLUDED.stock_name,
+                ema = EXCLUDED.ema,
+                open = EXCLUDED.open,
+                close = EXCLUDED.close,
+                volume = EXCLUDED.volume,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
+                pe_ratio = EXCLUDED.pe_ratio,
+                pb_ratio = EXCLUDED.pb_ratio,
+                peg_ratio = EXCLUDED.peg_ratio,
+                price_change_3m = EXCLUDED.price_change_3m,
+                price_change_6m = EXCLUDED.price_change_6m,
+                price_change_12m = EXCLUDED.price_change_12m,
+                earnings_yield = EXCLUDED.earnings_yield,
+                book_to_price = EXCLUDED.book_to_price,
+                last_modified_date = EXCLUDED.last_modified_date
+        """, values)
+        
+        conn.commit()  # Make sure to commit the transaction
+        
+    except Exception as e:
+        print(f"Error storing data for {data['stock']}: {str(e)}")
+        conn.rollback()  # Rollback on error
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 
 def store_statistics_data(data):
+
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -577,11 +583,15 @@ def store_statistics_data(data):
         data['dividend_payments'],
         data['share_repurchases'],
         data['shareholder_yield'],
-        None,  # return_on_equity_rank - will be set by ranking process
-        None,  # return_on_assets_rank - will be set by ranking process
-        None,  # price_to_sales_rank - will be set by ranking process
-        None,  # free_cash_flow_yield_rank - will be set by ranking process
-        None,  # shareholder_yield_rank - will be set by ranking process
+        None,  # return_on_equity_rank
+        None,  # return_on_assets_rank
+        None,  # price_to_sales_rank
+        None,  # free_cash_flow_yield_rank
+        None,  # shareholder_yield_rank
+        data['ev_ebitda'],
+        data['diluted_eps'],
+        data['book_value_per_share'],
+        data['quarterly_earnings_growth_yoy'],
         datetime.now(timezone.utc)
     )]
 
@@ -605,6 +615,10 @@ def store_statistics_data(data):
             price_to_sales_rank,
             free_cash_flow_yield_rank,
             shareholder_yield_rank,
+            ev_ebitda,
+            diluted_eps,
+            book_value_per_share,
+            quarterly_earnings_growth_yoy,
             last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
@@ -624,6 +638,10 @@ def store_statistics_data(data):
             price_to_sales_rank = EXCLUDED.price_to_sales_rank,
             free_cash_flow_yield_rank = EXCLUDED.free_cash_flow_yield_rank,
             shareholder_yield_rank = EXCLUDED.shareholder_yield_rank,
+            ev_ebitda = EXCLUDED.ev_ebitda,
+            diluted_eps = EXCLUDED.diluted_eps,
+            book_value_per_share = EXCLUDED.book_value_per_share,
+            quarterly_earnings_growth_yoy = EXCLUDED.quarterly_earnings_growth_yoy,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 

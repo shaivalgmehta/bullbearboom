@@ -52,39 +52,56 @@ class DailyDataTransformer(BaseTransformer):
             return None
 
 class CoreDataTransformer(BaseTransformer):
+    def __init__(self, db_params=None):
+        self.db_params = db_params
+
     def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         try:
             stock_data = data['stock_data']
             technical_indicator = data['technical_indicator']
-            statistics = data['statistics']
             price_changes = data.get('price_changes', {})
-        
-        
-            # Handle case where technical_indicator is empty list
+            
             if not technical_indicator:
                 return []
             
-            # Handle both list and dictionary cases for technical_indicator
             tech_data = technical_indicator[0] if isinstance(technical_indicator, list) else technical_indicator
+            current_price = self._parse_numeric(tech_data['close'])
+            
+            with psycopg2.connect(**self.db_params) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT diluted_eps, book_value_per_share, quarterly_earnings_growth_yoy
+                        FROM us_quarterly_table
+                        WHERE stock = %s
+                        ORDER BY datetime DESC
+                        LIMIT 1
+                    """, (stock_data['symbol'],))
+                    quarterly_data = cur.fetchone()
 
-            pe_ratio = self._parse_numeric(statistics['statistics']['valuations_metrics']['trailing_pe'])
-            pb_ratio = self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_book_mrq'])
-   
+            if quarterly_data and current_price:
+                diluted_eps = float(quarterly_data[0]) if quarterly_data[0] else None
+                book_value_per_share = float(quarterly_data[1]) if quarterly_data[1] else None
+                quarterly_earnings_growth_yoy = float(quarterly_data[2]) if quarterly_data[2] else None
+                
+                pe_ratio = current_price / diluted_eps if diluted_eps and diluted_eps != 0 else None
+                pb_ratio = current_price / book_value_per_share if book_value_per_share and book_value_per_share != 0 else None
+                peg_ratio = pe_ratio / quarterly_earnings_growth_yoy if pe_ratio and quarterly_earnings_growth_yoy and quarterly_earnings_growth_yoy != 0 else None
+            else:
+                pe_ratio = pb_ratio = peg_ratio = None
+
             transformed_data = {
                 'datetime': tech_data['datetime'],
                 'stock': stock_data['symbol'],
                 'stock_name': stock_data['name'],
                 'ema': self._parse_numeric(tech_data['ema']),
                 'open': self._parse_numeric(tech_data['open']),
-                'close': self._parse_numeric(tech_data['close']),
+                'close': current_price,
                 'volume': self._parse_numeric(tech_data['volume']),
                 'high': self._parse_numeric(tech_data['high']),
                 'low': self._parse_numeric(tech_data['low']),
-                'market_cap': self._parse_numeric(statistics['statistics']['valuations_metrics']['market_capitalization']),
-                'pe_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['trailing_pe']),
-                'ev_ebitda': self._parse_numeric(statistics['statistics']['valuations_metrics']['enterprise_to_ebitda']),
-                'pb_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_book_mrq']),
-                'peg_ratio': self._parse_numeric(statistics['statistics']['valuations_metrics']['peg_ratio']),
+                'pe_ratio': pe_ratio,
+                'pb_ratio': pb_ratio,
+                'peg_ratio': peg_ratio,
                 'price_change_3m': self._parse_numeric(price_changes.get('price_change_3m')),
                 'price_change_6m': self._parse_numeric(price_changes.get('price_change_6m')),
                 'price_change_12m': self._parse_numeric(price_changes.get('price_change_12m')),
@@ -92,9 +109,6 @@ class CoreDataTransformer(BaseTransformer):
                 'book_to_price': 1 / pb_ratio if pb_ratio and pb_ratio != 0 else None
             }
             return [transformed_data]
-        except KeyError as e:
-            print(f"Error in CoreDataTransformer: Missing key {str(e)}")
-            return []
         except Exception as e:
             print(f"Error in CoreDataTransformer: {str(e)}")
             return []
@@ -114,7 +128,6 @@ class CoreDataTransformer(BaseTransformer):
 
 class StatisticsDataTransformer(BaseTransformer):
     def _parse_numeric(self, value: Any) -> float:
-        """Helper method to parse numeric values from various formats"""
         if isinstance(value, (int, float)):
             return float(value)
         elif isinstance(value, str):
@@ -129,9 +142,9 @@ class StatisticsDataTransformer(BaseTransformer):
         try:
             stock_data = data['stock_data']
             statistics = data['statistics']
-            cashflow = data.get('cashflow', {})  # Use get() with default empty dict
+            cashflow = data.get('cashflow', {})
             
-            # Get basic quarterly data from statistics
+            # Get quarterly data
             market_cap = self._parse_numeric(statistics['statistics']['valuations_metrics']['market_capitalization'])
             sales = self._parse_numeric(statistics['statistics']['financials']['income_statement']['revenue_ttm'])
             ebitda = self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda'])
@@ -139,19 +152,22 @@ class StatisticsDataTransformer(BaseTransformer):
             roa = self._parse_numeric(statistics['statistics']['financials']['return_on_assets_ttm'])
             price_to_sales = self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_sales_ttm'])
             
+            # New fields
+            ev_ebitda = self._parse_numeric(statistics['statistics']['valuations_metrics']['enterprise_to_ebitda'])
+            diluted_eps = self._parse_numeric(statistics['statistics']['financials']['income_statement']['diluted_eps_ttm'])
+            book_value_per_share = self._parse_numeric(statistics['statistics']['financials']['balance_sheet']['book_value_per_share_mrq'])
+            quarterly_earnings_growth_yoy = self._parse_numeric(statistics['statistics']['financials']['income_statement']['quarterly_earnings_growth_yoy'])
             
-            # Get cash flow data from the separate cash flow endpoint
+            # Process cash flow data
             try:
                 if cashflow and 'cash_flow' in cashflow and len(cashflow['cash_flow']) > 0:
                     most_recent_quarter = cashflow['cash_flow'][0]
                     free_cash_flow = self._parse_numeric(most_recent_quarter.get('free_cash_flow'))
                     
-                    # Safely get financing activities
                     financing = most_recent_quarter.get('financing_activities', {})
                     dividend_raw = financing.get('common_dividends')
                     repurchase_raw = financing.get('common_stock_repurchase')
                     
-                    # Only apply abs() if value is not None
                     dividend_payments = abs(self._parse_numeric(dividend_raw)) if dividend_raw is not None else None
                     share_repurchases = abs(self._parse_numeric(repurchase_raw)) if repurchase_raw is not None else None
                 else:
@@ -164,7 +180,7 @@ class StatisticsDataTransformer(BaseTransformer):
                 dividend_payments = None
                 share_repurchases = None
                 
-            # Calculate derived metrics with None checks
+            # Calculate derived metrics
             fcf_yield = ((free_cash_flow / market_cap) * 100 
                         if all(v is not None and market_cap != 0 for v in [free_cash_flow, market_cap]) 
                         else None)
@@ -177,7 +193,7 @@ class StatisticsDataTransformer(BaseTransformer):
                                if all(v is not None and market_cap != 0 for v in [total_shareholder_return, market_cap]) 
                                else None)
             
-            # Get the datetime from cashflow if available, otherwise from statistics
+            # Get datetime
             if cashflow and 'cash_flow' in cashflow and len(cashflow['cash_flow']) > 0:
                 datetime_value = cashflow['cash_flow'][0].get('fiscal_date')
             else:
@@ -196,7 +212,12 @@ class StatisticsDataTransformer(BaseTransformer):
                 'free_cash_flow_yield': fcf_yield,
                 'dividend_payments': dividend_payments,
                 'share_repurchases': share_repurchases,
-                'shareholder_yield': shareholder_yield
+                'shareholder_yield': shareholder_yield,
+                # New fields added
+                'ev_ebitda': ev_ebitda,
+                'diluted_eps': diluted_eps,
+                'book_value_per_share': book_value_per_share,
+                'quarterly_earnings_growth_yoy': quarterly_earnings_growth_yoy
             }
             return [transformed_data]
         except KeyError as e:
@@ -595,7 +616,7 @@ class AnchoredOBVTransformer(BaseTransformer):
 
 def get_transformer(source: str, db_params=None) -> BaseTransformer:
     if source.lower() == 'core_data':
-        return CoreDataTransformer()
+        return CoreDataTransformer(db_params)
     elif source.lower() == 'daily_data':
         return DailyDataTransformer()
     elif source.lower() == 'williams_r':
