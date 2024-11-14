@@ -363,48 +363,201 @@ def store_insider_trades(trades: List[Dict], batch_size: int = 50):
     conn.close()
     cur.close()
 
-def update_missing_follow_up_prices():
+def update_missing_follow_up_prices(batch_size: int = 50):
     """
     Update follow-up prices for any transactions that were too recent
-    when initially stored.
+    when initially stored. Processes in batches to reduce database load.
     """
     conn = psycopg2.connect(**db_params)
     cur = conn.cursor()
     
-    # Get transactions missing follow-up prices that are now old enough
-    cur.execute("""
-        SELECT datetime, stock
-        FROM us_insider_trading_table
-        WHERE (datetime < NOW() - INTERVAL '91 days')
-        AND (one_month_price IS NULL OR three_month_price IS NULL)
-    """)
-    
-    transactions = cur.fetchall()
-    
-    for transaction_date, stock in transactions:
-        follow_up_prices = get_follow_up_prices(stock, transaction_date, cur)
-        
+    try:
+        # Get total count of transactions needing updates
         cur.execute("""
-            UPDATE us_insider_trading_table
-            SET one_month_price = %s,
-                three_month_price = %s,
-                one_month_date = %s,
-                three_month_date = %s,
-                one_month_return = %s,
-                three_month_return = %s,
-                last_modified_date = NOW()
-            WHERE datetime = %s AND stock = %s
-        """, (
-            follow_up_prices.get('one_month_price'),
-            follow_up_prices.get('three_month_price'),
-            follow_up_prices.get('one_month_date'),
-            follow_up_prices.get('three_month_date'),
-            follow_up_prices.get('one_month_return'),
-            follow_up_prices.get('three_month_return'),
-            transaction_date,
-            stock
-        ))
+            SELECT COUNT(*)
+            FROM us_insider_trading_table
+            WHERE (datetime < NOW() - INTERVAL '91 days')
+            AND (one_month_price IS NULL OR three_month_price IS NULL)
+        """)
+        total_count = cur.fetchone()[0]
+        
+        if total_count == 0:
+            print("No transactions need follow-up price updates")
+            return
+
+        # Get all transactions needing updates
+        cur.execute("""
+            SELECT datetime, stock
+            FROM us_insider_trading_table
+            WHERE (datetime < NOW() - INTERVAL '91 days')
+            AND (one_month_price IS NULL OR three_month_price IS NULL)
+            ORDER BY datetime DESC
+        """)
+        
+        transactions = cur.fetchall()
+        num_batches = math.ceil(len(transactions) / batch_size)
+        
+        print(f"Found {len(transactions)} transactions needing updates. Processing in {num_batches} batches.")
+        
+        for batch_num in range(num_batches):
+            start_idx = batch_num * batch_size
+            end_idx = min((batch_num + 1) * batch_size, len(transactions))
+            batch = transactions[start_idx:end_idx]
+            
+            print(f"Processing batch {batch_num + 1} of {num_batches} ({len(batch)} transactions)")
+            
+            for transaction_date, stock in batch:
+                try:
+                    follow_up_prices = get_follow_up_prices(stock, transaction_date, cur)
+                    
+                    cur.execute("""
+                        UPDATE us_insider_trading_table
+                        SET one_month_price = %s,
+                            three_month_price = %s,
+                            one_month_date = %s,
+                            three_month_date = %s,
+                            one_month_return = %s,
+                            three_month_return = %s,
+                            last_modified_date = NOW()
+                        WHERE datetime = %s AND stock = %s
+                    """, (
+                        follow_up_prices.get('one_month_price'),
+                        follow_up_prices.get('three_month_price'),
+                        follow_up_prices.get('one_month_date'),
+                        follow_up_prices.get('three_month_date'),
+                        follow_up_prices.get('one_month_return'),
+                        follow_up_prices.get('three_month_return'),
+                        transaction_date,
+                        stock
+                    ))
+                except Exception as e:
+                    print(f"Error updating follow-up prices for {stock} on {transaction_date}: {e}")
+                    continue
+            
+            # Commit after each batch
+            conn.commit()
+            print(f"Completed batch {batch_num + 1}")
+            
+            # Optional: Add a small delay between batches to reduce database load
+            time.sleep(0.1)
+        
+        print(f"Completed updating follow-up prices for {len(transactions)} transactions")
+        
+    except Exception as e:
+        print(f"Error in batch update process: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+def update_all_missing_returns(batch_size: int = 50):
+    """
+    One-time function to update all records in us_insider_trading_table
+    that have null one_month_return values, regardless of date.
+    """
+    conn = psycopg2.connect(**db_params)
+    cur = conn.cursor()
     
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        # Get count of all transactions needing updates
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM us_insider_trading_table
+            WHERE one_month_price IS NULL
+        """)
+        total_count = cur.fetchone()[0]
+        
+        if total_count == 0:
+            print("No transactions need updates")
+            return
+
+        # Get all transactions needing updates
+        cur.execute("""
+            SELECT datetime, stock
+            FROM us_insider_trading_table
+            WHERE one_month_price IS NULL
+            ORDER BY datetime DESC
+        """)
+        
+        transactions = cur.fetchall()
+        num_batches = math.ceil(len(transactions) / batch_size)
+        
+        print(f"Found {len(transactions)} transactions needing updates. Processing in {num_batches} batches.")
+        
+        success_count = 0
+        error_count = 0
+        
+        for batch_num in range(num_batches):
+            start_idx = batch_num * batch_size
+            end_idx = min((batch_num + 1) * batch_size, len(transactions))
+            batch = transactions[start_idx:end_idx]
+            
+            print(f"\nProcessing batch {batch_num + 1} of {num_batches} ({len(batch)} transactions)")
+            
+            batch_success = 0
+            batch_errors = 0
+            
+            for transaction_date, stock in batch:
+                try:
+                    follow_up_prices = get_follow_up_prices(stock, transaction_date, cur)
+                    
+                    if follow_up_prices.get('one_month_price') is not None:
+                        cur.execute("""
+                            UPDATE us_insider_trading_table
+                            SET one_month_price = %s,
+                                three_month_price = %s,
+                                one_month_date = %s,
+                                three_month_date = %s,
+                                one_month_return = %s,
+                                three_month_return = %s,
+                                last_modified_date = NOW()
+                            WHERE datetime = %s AND stock = %s
+                        """, (
+                            follow_up_prices.get('one_month_price'),
+                            follow_up_prices.get('three_month_price'),
+                            follow_up_prices.get('one_month_date'),
+                            follow_up_prices.get('three_month_date'),
+                            follow_up_prices.get('one_month_return'),
+                            follow_up_prices.get('three_month_return'),
+                            transaction_date,
+                            stock
+                        ))
+                        batch_success += 1
+                    else:
+                        print(f"No follow-up prices found for {stock} on {transaction_date}")
+                        batch_errors += 1
+                        
+                except Exception as e:
+                    print(f"Error updating {stock} on {transaction_date}: {e}")
+                    batch_errors += 1
+                    continue
+            
+            # Commit after each batch
+            conn.commit()
+            success_count += batch_success
+            error_count += batch_errors
+            
+            print(f"Batch {batch_num + 1} complete:")
+            print(f"  Successful updates: {batch_success}")
+            print(f"  Failed updates: {batch_errors}")
+            print(f"Running totals - Success: {success_count}, Errors: {error_count}")
+            
+            # Small delay between batches
+            time.sleep(0.1)
+        
+        print(f"\nProcess complete:")
+        print(f"Total transactions processed: {len(transactions)}")
+        print(f"Successful updates: {success_count}")
+        print(f"Failed updates: {error_count}")
+        
+    except Exception as e:
+        print(f"Fatal error in update process: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+if __name__ == "__main__":
+    print("Starting one-time update of all missing returns...")
+    update_all_missing_returns(batch_size=50)
+    print("Process complete")

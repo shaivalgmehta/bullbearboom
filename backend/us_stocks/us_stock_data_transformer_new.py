@@ -113,27 +113,8 @@ class CoreDataTransformer(BaseTransformer):
 ################# STATISTICS DATA TRANSFORMER ###########################################################################
 
 class StatisticsDataTransformer(BaseTransformer):
-    def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        try:
-            stock_data = data['stock_data']
-            statistics = data['statistics']
-            
-            transformed_data = {
-                'datetime': statistics['statistics']['financials']['most_recent_quarter'],
-                'stock': stock_data['symbol'],
-                'sales': self._parse_numeric(statistics['statistics']['financials']['income_statement']['revenue_ttm']),
-                'ebitda': self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda']),
-                'free_cash_flow': self._parse_numeric(statistics['statistics']['financials']['cash_flow']['operating_cash_flow_ttm'])
-            }
-            return [transformed_data]
-        except KeyError as e:
-            print(f"Error in StatisticsDataTransformer: Missing key {str(e)}")
-            return []
-        except Exception as e:
-            print(f"Error in StatisticsDataTransformer: {str(e)}")
-            return []
-
     def _parse_numeric(self, value: Any) -> float:
+        """Helper method to parse numeric values from various formats"""
         if isinstance(value, (int, float)):
             return float(value)
         elif isinstance(value, str):
@@ -143,6 +124,87 @@ class StatisticsDataTransformer(BaseTransformer):
                 return None
         else:
             return None
+
+    def transform(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        try:
+            stock_data = data['stock_data']
+            statistics = data['statistics']
+            cashflow = data.get('cashflow', {})  # Use get() with default empty dict
+            
+            # Get basic quarterly data from statistics
+            market_cap = self._parse_numeric(statistics['statistics']['valuations_metrics']['market_capitalization'])
+            sales = self._parse_numeric(statistics['statistics']['financials']['income_statement']['revenue_ttm'])
+            ebitda = self._parse_numeric(statistics['statistics']['financials']['income_statement']['ebitda'])
+            roe = self._parse_numeric(statistics['statistics']['financials']['return_on_equity_ttm'])
+            roa = self._parse_numeric(statistics['statistics']['financials']['return_on_assets_ttm'])
+            price_to_sales = self._parse_numeric(statistics['statistics']['valuations_metrics']['price_to_sales_ttm'])
+            
+            
+            # Get cash flow data from the separate cash flow endpoint
+            try:
+                if cashflow and 'cash_flow' in cashflow and len(cashflow['cash_flow']) > 0:
+                    most_recent_quarter = cashflow['cash_flow'][0]
+                    free_cash_flow = self._parse_numeric(most_recent_quarter.get('free_cash_flow'))
+                    
+                    # Safely get financing activities
+                    financing = most_recent_quarter.get('financing_activities', {})
+                    dividend_raw = financing.get('common_dividends')
+                    repurchase_raw = financing.get('common_stock_repurchase')
+                    
+                    # Only apply abs() if value is not None
+                    dividend_payments = abs(self._parse_numeric(dividend_raw)) if dividend_raw is not None else None
+                    share_repurchases = abs(self._parse_numeric(repurchase_raw)) if repurchase_raw is not None else None
+                else:
+                    free_cash_flow = None
+                    dividend_payments = None
+                    share_repurchases = None
+            except Exception as e:
+                print(f"Error processing cash flow data: {str(e)}")
+                free_cash_flow = None
+                dividend_payments = None
+                share_repurchases = None
+                
+            # Calculate derived metrics with None checks
+            fcf_yield = ((free_cash_flow / market_cap) * 100 
+                        if all(v is not None and market_cap != 0 for v in [free_cash_flow, market_cap]) 
+                        else None)
+            
+            total_shareholder_return = ((dividend_payments or 0) + (share_repurchases or 0) 
+                                      if dividend_payments is not None or share_repurchases is not None 
+                                      else None)
+            
+            shareholder_yield = ((total_shareholder_return / market_cap) * 100 
+                               if all(v is not None and market_cap != 0 for v in [total_shareholder_return, market_cap]) 
+                               else None)
+            
+            # Get the datetime from cashflow if available, otherwise from statistics
+            if cashflow and 'cash_flow' in cashflow and len(cashflow['cash_flow']) > 0:
+                datetime_value = cashflow['cash_flow'][0].get('fiscal_date')
+            else:
+                datetime_value = statistics['statistics']['financials']['most_recent_quarter']
+            
+            transformed_data = {
+                'datetime': datetime_value,
+                'stock': stock_data['symbol'],
+                'sales': sales,
+                'ebitda': ebitda,
+                'free_cash_flow': free_cash_flow,
+                'market_cap': market_cap,
+                'return_on_equity': roe,
+                'return_on_assets': roa,
+                'price_to_sales': price_to_sales,
+                'free_cash_flow_yield': fcf_yield,
+                'dividend_payments': dividend_payments,
+                'share_repurchases': share_repurchases,
+                'shareholder_yield': shareholder_yield
+            }
+            return [transformed_data]
+        except KeyError as e:
+            print(f"Error in StatisticsDataTransformer: Missing key {str(e)}")
+            return []
+        except Exception as e:
+            print(f"Error in StatisticsDataTransformer: {str(e)}")
+            return []
 
 ################# WILLIAMS R MOMENTUM ALERT TRANSFORMER & CALCULATIONS ###########################################################################
 

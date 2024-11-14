@@ -81,6 +81,11 @@ def fetch_stock_statistics_twelve_data(symbol):
     statistics = td.get_statistics(symbol=symbol, country="United States").as_json()
     return statistics
 
+def fetch_stock_cashflow_twelve_data(symbol):
+    td = TDClient(apikey=TWELVE_DATA_API_KEY)
+    cashflow = td.get_cash_flow(symbol=symbol, country="United States", period="quarterly").as_json()
+    return cashflow
+
 def fetch_missing_data_from_twelve_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     td = TDClient(apikey=TWELVE_DATA_API_KEY)
     time_series = td.time_series(
@@ -564,17 +569,61 @@ def store_statistics_data(data):
         data['sales'],
         data['ebitda'],
         data['free_cash_flow'],
+        data['market_cap'],
+        data['return_on_equity'],
+        data['return_on_assets'],
+        data['price_to_sales'],
+        data['free_cash_flow_yield'],
+        data['dividend_payments'],
+        data['share_repurchases'],
+        data['shareholder_yield'],
+        None,  # return_on_equity_rank - will be set by ranking process
+        None,  # return_on_assets_rank - will be set by ranking process
+        None,  # price_to_sales_rank - will be set by ranking process
+        None,  # free_cash_flow_yield_rank - will be set by ranking process
+        None,  # shareholder_yield_rank - will be set by ranking process
         datetime.now(timezone.utc)
     )]
 
     execute_values(cur, """
         INSERT INTO us_quarterly_table (
-            datetime, stock, sales, ebitda, free_cash_flow, last_modified_date
+            datetime, 
+            stock, 
+            sales, 
+            ebitda, 
+            free_cash_flow,
+            market_cap,
+            return_on_equity,
+            return_on_assets,
+            price_to_sales,
+            free_cash_flow_yield,
+            dividend_payments,
+            share_repurchases,
+            shareholder_yield,
+            return_on_equity_rank,
+            return_on_assets_rank,
+            price_to_sales_rank,
+            free_cash_flow_yield_rank,
+            shareholder_yield_rank,
+            last_modified_date
         ) VALUES %s
         ON CONFLICT (datetime, stock) DO UPDATE SET
             sales = EXCLUDED.sales,
             ebitda = EXCLUDED.ebitda,
             free_cash_flow = EXCLUDED.free_cash_flow,
+            market_cap = EXCLUDED.market_cap,
+            return_on_equity = EXCLUDED.return_on_equity,
+            return_on_assets = EXCLUDED.return_on_assets,
+            price_to_sales = EXCLUDED.price_to_sales,
+            free_cash_flow_yield = EXCLUDED.free_cash_flow_yield,
+            dividend_payments = EXCLUDED.dividend_payments,
+            share_repurchases = EXCLUDED.share_repurchases,
+            shareholder_yield = EXCLUDED.shareholder_yield,
+            return_on_equity_rank = EXCLUDED.return_on_equity_rank,
+            return_on_assets_rank = EXCLUDED.return_on_assets_rank,
+            price_to_sales_rank = EXCLUDED.price_to_sales_rank,
+            free_cash_flow_yield_rank = EXCLUDED.free_cash_flow_yield_rank,
+            shareholder_yield_rank = EXCLUDED.shareholder_yield_rank,
             last_modified_date = EXCLUDED.last_modified_date
     """, values)
 

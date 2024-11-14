@@ -28,6 +28,11 @@ const columnMap = {
   'peg_ratio': 'PEG Ratio',
   'earnings_yield': 'Earnings Yield',
   'book_to_price': 'B/P Ratio',
+  'return_on_equity': 'Return on Equity',
+  'return_on_assets': 'Return on Assets',
+  'price_to_sales': 'Price to Sales',
+  'free_cash_flow_yield': 'FCF Yield',
+  'shareholder_yield': 'Shareholder Yield',
   'last_quarter_sales': 'Last Quarter Sales',
   'current_quarter_sales': 'Current Quarter Sales',
   'sales_change_percent': 'Sales % Change',
@@ -43,15 +48,20 @@ const columnMap = {
   'force_index_52_week': '52-Week Force Index',
   'force_index_alert_state': 'Force Index Alert',
   'anchored_obv_alert_state': 'Anchored OBV Alert',
+  'price_change_3m': '3-Month Price Change',
+  'price_change_6m': '6-Month Price Change',
+  'price_change_12m': '12-Month Price Change',
   'pe_ratio_rank': 'P/E Ratio Ranking',
   'ev_ebitda_rank': 'EV/EBITDA Ranking',
   'pb_ratio_rank': 'P/B Ratio Ranking',
   'peg_ratio_rank': 'PEG Ratio Ranking',
   'earnings_yield_rank': 'Earnings Yield Rank',
   'book_to_price_rank': 'Book to Price Rank',
-  'price_change_3m': '3-Month Price Change',
-  'price_change_6m': '6-Month Price Change',
-  'price_change_12m': '12-Month Price Change',
+  'return_on_equity_rank': 'ROE Rank',
+  'return_on_assets_rank': 'ROA Rank',
+  'price_to_sales_rank': 'P/S Rank',
+  'free_cash_flow_yield_rank': 'FCF Yield Rank',
+  'shareholder_yield_rank': 'Shareholder Yield Rank',
   'datetime': 'Time'
 };
 
@@ -61,7 +71,11 @@ const numericalColumns = [
   'last_quarter_ebitda', 'ema', 'williams_r', 'williams_r_ema', 'force_index_7_week',
   'force_index_52_week', 'pe_ratio_rank', 'ev_ebitda_rank', 'pb_ratio_rank',
   'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m',
-  'earnings_yield', 'book_to_price', 'earnings_yield_rank', 'book_to_price_rank'
+  'earnings_yield', 'book_to_price', 'earnings_yield_rank', 'book_to_price_rank', 
+  'return_on_equity', 'return_on_assets', 'price_to_sales',
+  'free_cash_flow_yield', 'shareholder_yield',
+  'return_on_equity_rank', 'return_on_assets_rank', 'price_to_sales_rank',
+  'free_cash_flow_yield_rank', 'shareholder_yield_rank'
 ];
 
 const filterColumns = [
@@ -80,7 +94,12 @@ const filterColumns = [
   'pb_ratio_rank',
   'peg_ratio_rank',
   'earnings_yield_rank',
-  'book_to_price_rank'
+  'book_to_price_rank',
+  'return_on_equity', 
+  'return_on_assets', 
+  'price_to_sales',
+  'free_cash_flow_yield', 
+  'shareholder_yield'
 ];
 
 const alertStateOptions = ['$', '$$$', '-'];
@@ -131,6 +150,10 @@ const formatColumnValue = (column, value) => {
     case 'williams_r_ema':
     case 'force_index_7_week':
     case 'force_index_52_week':
+    case 'return_on_equity':
+    case 'return_on_assets':
+    case 'free_cash_flow_yield':
+    case 'shareholder_yield':  
       return formatRatio(value);
     case 'sales_change_percent':
     case 'ebitda_change_percent':
@@ -143,7 +166,12 @@ const formatColumnValue = (column, value) => {
     case 'pb_ratio_rank':
     case 'peg_ratio_rank':
     case 'earnings_yield_rank':
-    case 'book_to_price_rank':      
+    case 'book_to_price_rank':
+    case 'return_on_equity_rank':
+    case 'return_on_assets_rank':
+    case 'price_to_sales_rank':
+    case 'free_cash_flow_yield_rank':
+    case 'shareholder_yield_rank':      
       return formatRank(value);
     case 'datetime':
       return new Date(value).toLocaleString();

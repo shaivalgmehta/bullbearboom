@@ -67,7 +67,17 @@ def setup_database():
                 book_to_price_rank INTEGER,
                 price_change_3m NUMERIC,
                 price_change_6m NUMERIC,
-                price_change_12m NUMERIC,                
+                price_change_12m NUMERIC,
+                shareholder_yield DECIMAL,            
+                return_on_equity DECIMAL,
+                return_on_assets DECIMAL,
+                price_to_sales DECIMAL,
+                free_cash_flow_yield DECIMAL,
+                return_on_equity_rank INTEGER,
+                return_on_assets_rank INTEGER,
+                price_to_sales_rank INTEGER,
+                free_cash_flow_yield_rank INTEGER,
+                shareholder_yield_rank INTEGER,                
                 CONSTRAINT us_screener_pkey PRIMARY KEY (datetime, stock)
             """)
 
@@ -171,6 +181,19 @@ def setup_database():
                 roce NUMERIC,
                 free_cash_flow NUMERIC,
                 discounted_cash_flow NUMERIC,
+                market_cap DECIMAL,
+                return_on_equity DECIMAL,
+                return_on_assets DECIMAL,
+                price_to_sales DECIMAL,
+                free_cash_flow_yield DECIMAL,
+                dividend_payments DECIMAL,
+                share_repurchases DECIMAL,
+                shareholder_yield DECIMAL,
+                return_on_equity_rank INTEGER,
+                return_on_assets_rank INTEGER,
+                price_to_sales_rank INTEGER,
+                free_cash_flow_yield_rank INTEGER,
+                shareholder_yield_rank INTEGER,
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT us_quarterly_pkey PRIMARY KEY (datetime, stock)
             """)
