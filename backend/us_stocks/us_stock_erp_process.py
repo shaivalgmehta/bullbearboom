@@ -33,6 +33,7 @@ def calculate_erp5_rankings(date):
                     SELECT DISTINCT ON (stock)
                         stock,
                         return_on_equity_rank,
+                        ev_ebitda_rank,
                         datetime as quarterly_date
                     FROM us_quarterly_table
                     WHERE datetime <= %s 
@@ -45,6 +46,7 @@ def calculate_erp5_rankings(date):
                     d.pb_ratio_rank,
                     d.book_to_price_rank,
                     q.return_on_equity_rank,
+                    q.ev_ebitda_rank,
                     q.quarterly_date
                 FROM us_daily_table d
                 LEFT JOIN latest_quarterly q ON d.stock = q.stock
@@ -53,6 +55,7 @@ def calculate_erp5_rankings(date):
                 AND d.pb_ratio_rank IS NOT NULL
                 AND d.book_to_price_rank IS NOT NULL
                 AND q.return_on_equity_rank IS NOT NULL
+                AND q.ev_ebitda_rank IS NOT NULL
             """
             
             print("Executing query...")
@@ -77,7 +80,8 @@ def calculate_erp5_rankings(date):
                         row['earnings_yield_rank'],
                         row['pb_ratio_rank'],
                         row['book_to_price_rank'],
-                        row['return_on_equity_rank']
+                        row['return_on_equity_rank'],
+                        row['ev_ebitda_rank']  # Added EV/EBITDA rank
                     ])
                     erp5_scores.append((stock, combined_rank))
                 except (KeyError, TypeError) as e:

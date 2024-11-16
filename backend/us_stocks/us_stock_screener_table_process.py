@@ -35,12 +35,12 @@ def update_screener_table(selected_date=None):
             cur.execute("""
                 INSERT INTO us_screener_table (
                     datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
-                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
+                pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
                 price_change_3m, price_change_6m, price_change_12m, erp5_rank
                 )
                 SELECT DISTINCT ON (stock)
                     datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
-                ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
+                pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
                 price_change_3m, price_change_6m, price_change_12m, erp5_rank
                 FROM 
                     us_daily_table
@@ -99,7 +99,8 @@ def update_screener_table(selected_date=None):
                         MAX(CASE WHEN rn = 1 THEN return_on_assets_rank END) as return_on_assets_rank,
                         MAX(CASE WHEN rn = 1 THEN price_to_sales_rank END) as price_to_sales_rank,
                         MAX(CASE WHEN rn = 1 THEN free_cash_flow_yield_rank END) as free_cash_flow_yield_rank,
-                        MAX(CASE WHEN rn = 1 THEN shareholder_yield_rank END) as shareholder_yield_rank
+                        MAX(CASE WHEN rn = 1 THEN shareholder_yield_rank END) as shareholder_yield_rank,
+                        MAX(CASE WHEN rn = 1 THEN ev_ebitda_rank END) as ev_ebitda_rank
                     FROM (
                         SELECT 
                             *, 
@@ -141,7 +142,8 @@ def update_screener_table(selected_date=None):
                     return_on_assets_rank = lq.return_on_assets_rank,
                     price_to_sales_rank = lq.price_to_sales_rank,
                     free_cash_flow_yield_rank = lq.free_cash_flow_yield_rank,
-                    shareholder_yield_rank = lq.shareholder_yield_rank
+                    shareholder_yield_rank = lq.shareholder_yield_rank,
+                    ev_ebitda_rank = lq.ev_ebitda_rank                    
                 FROM latest_quarters lq
                 WHERE s.stock = lq.stock
             """, (target_date - timedelta(days=200),))

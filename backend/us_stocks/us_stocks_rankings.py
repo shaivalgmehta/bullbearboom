@@ -58,41 +58,53 @@ class MetricRanker:
 
 
     def rank_metric(self, df: pd.DataFrame, metric: str) -> pd.DataFrame:
-        """Rank a single metric with appropriate handling of unrealistic values."""
-        # Create a copy of the dataframe with only non-null values
-        ranking_df = df[['stock', metric]].dropna().copy()
-        
-        # Define minimum thresholds for each metric
-        min_thresholds = {
-            'pe_ratio': 0.5,     # Absolute minimum P/E
-            'ev_ebitda': 1.0,    # Absolute minimum EV/EBITDA
-            'pb_ratio': 0.2,     # Absolute minimum P/B
-            'peg_ratio': 0.2,     # Absolute minimum PEG
-            'earnings_yield': 0.005,     # Absolute minimum Earnings Yield
-            'book_to_price': 0.05     # Absolute minimum B/P
-        }
-        
-        # Handle unrealistic values for specified metrics
-        if metric in self.exclude_near_zero:
-            min_value = min_thresholds.get(metric, 0.01)  # Default to 0.01 if not specified
-            ranking_df = ranking_df[ranking_df[metric] >= min_value]
-        
-        # Handle metrics that should exclude negative values
-        if metric in self.exclude_negatives:
-            ranking_df = ranking_df[ranking_df[metric] > 0]
-        
-        # Determine ranking direction
-        ascending = not self.metric_directions[metric]
-        
-        # Add rank
-        if not ranking_df.empty:
-            ranking_df['rank'] = ranking_df[metric].rank(
+        try:
+            # Create a copy of the dataframe with only non-null values
+            ranking_df = df[['stock', metric]].copy()
+            
+            # Remove null values
+            ranking_df = ranking_df.dropna(subset=[metric])
+            
+            # Define minimum thresholds for each metric
+            min_thresholds = {
+                'pe_ratio': 0.5,     # Absolute minimum P/E
+                'ev_ebitda': 1.0,    # Absolute minimum EV/EBITDA
+                'pb_ratio': 0.2,     # Absolute minimum P/B
+                'peg_ratio': 0.2,     # Absolute minimum PEG
+                'earnings_yield': 0.005,  # Absolute minimum Earnings Yield
+                'book_to_price': 0.05     # Absolute minimum B/P
+            }
+            
+            # Handle unrealistic values for specified metrics
+            if metric in self.exclude_near_zero:
+                min_value = min_thresholds.get(metric, 0.01)
+                ranking_df = ranking_df[ranking_df[metric] >= min_value]
+            
+            # Handle metrics that should exclude negative values
+            if metric in self.exclude_negatives:
+                ranking_df = ranking_df[ranking_df[metric] > 0]
+            
+            # If no valid values remain, return empty DataFrame with correct columns
+            if ranking_df.empty:
+                return pd.DataFrame(columns=['stock', 'rank'])
+            
+            # Determine ranking direction
+            ascending = not self.metric_directions[metric]
+            
+            # Calculate ranks for valid values
+            ranking_df.loc[:, 'rank'] = ranking_df[metric].rank(
                 method='min',
                 ascending=ascending,
                 na_option='keep'
             )
-        
-        return ranking_df[['stock', 'rank']]
+            
+            # Return only stock and rank columns
+            return ranking_df[['stock', 'rank']]
+            
+        except Exception as e:
+            print(f"Error ranking metric {metric}: {str(e)}")
+            # Return empty DataFrame with correct columns on error
+            return pd.DataFrame(columns=['stock', 'rank'])
 
     def rank_metrics(self, conn, date: datetime) -> Dict[str, pd.DataFrame]:
         """Rank all metrics for the given date."""

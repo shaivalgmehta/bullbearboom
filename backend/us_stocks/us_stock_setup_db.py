@@ -196,6 +196,7 @@ def setup_database():
                 price_to_sales_rank INTEGER,
                 free_cash_flow_yield_rank INTEGER,
                 shareholder_yield_rank INTEGER,
+                ev_ebitda_rank INTEGER,                
                 diluted_eps DECIMAL,
                 book_value_per_share DECIMAL,
                 quarterly_earnings_growth_yoy DECIMAL,
