@@ -36,12 +36,12 @@ def update_screener_table(selected_date=None):
                 INSERT INTO us_screener_table (
                     datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
                 ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
-                price_change_3m, price_change_6m, price_change_12m
+                price_change_3m, price_change_6m, price_change_12m, erp5_rank
                 )
                 SELECT DISTINCT ON (stock)
                     datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
                 ev_ebitda_rank, pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
-                price_change_3m, price_change_6m, price_change_12m
+                price_change_3m, price_change_6m, price_change_12m, erp5_rank
                 FROM 
                     us_daily_table
                 WHERE 

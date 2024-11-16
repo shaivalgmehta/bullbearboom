@@ -28,8 +28,8 @@ const columnMap = {
   'peg_ratio': 'PEG Ratio',
   'earnings_yield': 'Earnings Yield',
   'book_to_price': 'B/P Ratio',
-  'return_on_equity': 'Return on Equity',
-  'return_on_assets': 'Return on Assets',
+  'return_on_equity': 'ROE',
+  'return_on_assets': 'ROA',
   'price_to_sales': 'Price to Sales',
   'free_cash_flow_yield': 'FCF Yield',
   'shareholder_yield': 'Shareholder Yield',
@@ -56,7 +56,8 @@ const columnMap = {
   'pb_ratio_rank': 'P/B Ratio Ranking',
   'peg_ratio_rank': 'PEG Ratio Ranking',
   'earnings_yield_rank': 'Earnings Yield Rank',
-  'book_to_price_rank': 'Book to Price Rank',
+  'book_to_price_rank': 'B/P Rank',
+  'erp5_rank': 'ERP5 Rank',
   'datetime': 'Time'
 };
 
@@ -68,7 +69,7 @@ const numericalColumns = [
   'peg_ratio_rank', 'price_change_3m', 'price_change_6m', 'price_change_12m',
   'earnings_yield', 'book_to_price', 'earnings_yield_rank', 'book_to_price_rank', 
   'return_on_equity', 'return_on_assets', 'price_to_sales',
-  'free_cash_flow_yield', 'shareholder_yield'
+  'free_cash_flow_yield', 'shareholder_yield', 'erp5_rank'
 ];
 
 const filterColumns = [
@@ -88,6 +89,7 @@ const filterColumns = [
   'peg_ratio_rank',
   'earnings_yield_rank',
   'book_to_price_rank',
+  'erp5_rank',
   'return_on_equity', 
   'return_on_assets', 
   'price_to_sales',
@@ -160,6 +162,7 @@ const formatColumnValue = (column, value) => {
     case 'peg_ratio_rank':
     case 'earnings_yield_rank':
     case 'book_to_price_rank':    
+    case 'erp5_rank':          
       return formatRank(value);
     case 'datetime':
       return new Date(value).toLocaleString();

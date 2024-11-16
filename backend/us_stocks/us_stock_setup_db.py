@@ -77,7 +77,8 @@ def setup_database():
                 return_on_assets_rank INTEGER,
                 price_to_sales_rank INTEGER,
                 free_cash_flow_yield_rank INTEGER,
-                shareholder_yield_rank INTEGER,                
+                shareholder_yield_rank INTEGER,
+                erp5_rank INTEGER,                
                 CONSTRAINT us_screener_pkey PRIMARY KEY (datetime, stock)
             """)
 
@@ -147,7 +148,8 @@ def setup_database():
                 peg_ratio_rank INTEGER,
                 price_change_3m NUMERIC,
                 price_change_6m NUMERIC,
-                price_change_12m NUMERIC,                 
+                price_change_12m NUMERIC,
+                erp5_rank INTEGER,                 
                 last_modified_date TIMESTAMPTZ NOT NULL,
                 CONSTRAINT us_daily_pkey PRIMARY KEY (datetime, stock)
             """)

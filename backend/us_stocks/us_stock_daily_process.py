@@ -143,7 +143,7 @@ def main():
     stock_data_transformer = get_transformer('core_data', db_params)
   
     # Process stocks in batches of 10
-    batch_size = 11
+    batch_size = 800
     for i in range(0, len(stocks), batch_size):
         batch = stocks[i:i+batch_size]
         
