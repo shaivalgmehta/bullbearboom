@@ -502,8 +502,8 @@ def get_crypto_historical_data(symbol):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Query for both force index and Williams %R data
-        query = """
+        # Query for technical indicators
+        cur.execute("""
             SELECT 
                 datetime,
                 force_index_7_week,
@@ -514,10 +514,50 @@ def get_crypto_historical_data(symbol):
             WHERE stock = %s
             AND datetime BETWEEN %s AND %s
             ORDER BY datetime ASC
-        """
+        """, (symbol, start_date, end_date))
         
-        cur.execute(query, (symbol, start_date, end_date))
-        data = cur.fetchall()
+        technical_data = cur.fetchall()
+        
+        # Query for price history
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                ema
+            FROM crypto_daily_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        price_history = cur.fetchall()
+
+        # Get latest daily data
+        cur.execute("""
+            SELECT 
+                datetime,
+                close,
+                volume,
+                ema,
+                high,
+                low,
+                open,
+                all_time_high,
+                ath_percentage,
+                price_change_3m,
+                price_change_6m,
+                price_change_12m
+            FROM crypto_daily_table
+            WHERE stock = %s
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, (symbol,))
+        
+        current_data = cur.fetchone()
         
         # Also fetch basic crypto info
         cur.execute("""
@@ -531,7 +571,7 @@ def get_crypto_historical_data(symbol):
         cur.close()
         conn.close()
         
-        if not data:
+        if not technical_data and not price_history:
             return jsonify({
                 "error": f"No data found for crypto {symbol}"
             }), 404
@@ -540,7 +580,9 @@ def get_crypto_historical_data(symbol):
             "symbol": symbol,
             "stock_name": crypto_info['stock_name'] if crypto_info else None,
             "crypto_name": crypto_info['crypto_name'] if crypto_info else None,
-            "data": data
+            "current_data": current_data,
+            "technical_data": technical_data,
+            "price_history": price_history
         })
         
     except Exception as e:
@@ -564,7 +606,8 @@ def get_crypto_historical_data_eth(symbol):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        query = """
+        # Query for technical indicators
+        cur.execute("""
             SELECT 
                 datetime,
                 force_index_7_week,
@@ -575,11 +618,52 @@ def get_crypto_historical_data_eth(symbol):
             WHERE stock = %s
             AND datetime BETWEEN %s AND %s
             ORDER BY datetime ASC
-        """
+        """, (symbol, start_date, end_date))
         
-        cur.execute(query, (symbol, start_date, end_date))
-        data = cur.fetchall()
+        technical_data = cur.fetchall()
         
+        # Query for price history
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                ema
+            FROM crypto_daily_table_eth
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        price_history = cur.fetchall()
+
+        # Get latest daily data
+        cur.execute("""
+            SELECT 
+                datetime,
+                close,
+                volume,
+                ema,
+                high,
+                low,
+                open,
+                all_time_high,
+                ath_percentage,
+                price_change_3m,
+                price_change_6m,
+                price_change_12m
+            FROM crypto_daily_table_eth
+            WHERE stock = %s
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, (symbol,))
+        
+        current_data = cur.fetchone()
+        
+        # Also fetch basic crypto info
         cur.execute("""
             SELECT DISTINCT stock_name, crypto_name
             FROM crypto_daily_table_eth
@@ -591,7 +675,7 @@ def get_crypto_historical_data_eth(symbol):
         cur.close()
         conn.close()
         
-        if not data:
+        if not technical_data and not price_history:
             return jsonify({
                 "error": f"No data found for crypto {symbol} (ETH base)"
             }), 404
@@ -600,7 +684,9 @@ def get_crypto_historical_data_eth(symbol):
             "symbol": symbol,
             "stock_name": crypto_info['stock_name'] if crypto_info else None,
             "crypto_name": crypto_info['crypto_name'] if crypto_info else None,
-            "data": data
+            "current_data": current_data,
+            "technical_data": technical_data,
+            "price_history": price_history
         })
         
     except Exception as e:
@@ -624,7 +710,8 @@ def get_crypto_historical_data_btc(symbol):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        query = """
+        # Query for technical indicators
+        cur.execute("""
             SELECT 
                 datetime,
                 force_index_7_week,
@@ -635,11 +722,52 @@ def get_crypto_historical_data_btc(symbol):
             WHERE stock = %s
             AND datetime BETWEEN %s AND %s
             ORDER BY datetime ASC
-        """
+        """, (symbol, start_date, end_date))
         
-        cur.execute(query, (symbol, start_date, end_date))
-        data = cur.fetchall()
+        technical_data = cur.fetchall()
         
+        # Query for price history
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                ema
+            FROM crypto_daily_table_btc
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        price_history = cur.fetchall()
+
+        # Get latest daily data
+        cur.execute("""
+            SELECT 
+                datetime,
+                close,
+                volume,
+                ema,
+                high,
+                low,
+                open,
+                all_time_high,
+                ath_percentage,
+                price_change_3m,
+                price_change_6m,
+                price_change_12m
+            FROM crypto_daily_table_btc
+            WHERE stock = %s
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, (symbol,))
+        
+        current_data = cur.fetchone()
+        
+        # Also fetch basic crypto info
         cur.execute("""
             SELECT DISTINCT stock_name, crypto_name
             FROM crypto_daily_table_btc
@@ -651,7 +779,7 @@ def get_crypto_historical_data_btc(symbol):
         cur.close()
         conn.close()
         
-        if not data:
+        if not technical_data and not price_history:
             return jsonify({
                 "error": f"No data found for crypto {symbol} (BTC base)"
             }), 404
@@ -660,7 +788,9 @@ def get_crypto_historical_data_btc(symbol):
             "symbol": symbol,
             "stock_name": crypto_info['stock_name'] if crypto_info else None,
             "crypto_name": crypto_info['crypto_name'] if crypto_info else None,
-            "data": data
+            "current_data": current_data,
+            "technical_data": technical_data,
+            "price_history": price_history
         })
         
     except Exception as e:

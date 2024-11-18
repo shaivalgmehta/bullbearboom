@@ -6,17 +6,36 @@ import {
   Paper, 
   CircularProgress,
   Alert,
+  Grid,
   Card,
-  CardContent
+  CardContent,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { format, subDays } from 'date-fns';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ForceIndexGraph from './ForceIndexGraph';
 import WilliamsRGraph from './WilliamsRGraph';
+import CryptoPriceGraph from './CryptoPriceGraph';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
+
+const StatCard = ({ title, value, suffix = '', prefix = '' }) => (
+  <Card sx={{ height: '100%' }}>
+    <CardContent>
+      <Typography color="textSecondary" gutterBottom variant="body2">
+        {title}
+      </Typography>
+      <Typography variant="h6">
+        {prefix}{value !== null && value !== undefined ? value : 'N/A'}{suffix}
+      </Typography>
+    </CardContent>
+  </Card>
+);
 
 const formatValue = (value, base) => {
   if (value === null || value === undefined) return 'N/A';
@@ -40,6 +59,19 @@ const formatValue = (value, base) => {
   }
 };
 
+const formatPercent = (value) => {
+  if (!value) return 'N/A';
+  return `${(value * 100).toFixed(2)}%`;
+};
+
+const formatNumber = (value) => {
+  if (!value) return 'N/A';
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    compactDisplay: 'short'
+  }).format(value);
+};
+
 function CryptoDetailApp() {
   const { symbol } = useParams();
   const location = useLocation();
@@ -48,21 +80,21 @@ function CryptoDetailApp() {
   const [error, setError] = useState(null);
   const [startDate, setStartDate] = useState(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState(new Date());
+  const [expandedPanels, setExpandedPanels] = useState({
+    price: true,
+    force: true,
+    williams: true
+  });
 
   // Determine base currency from URL path
   const base = location.pathname.includes('_eth') ? 'ETH' : 
                location.pathname.includes('_btc') ? 'BTC' : 'USD';
 
-  // Get appropriate endpoint suffix based on base currency
-  const getEndpointSuffix = () => {
-    switch(base) {
-      case 'ETH':
-        return '/historical_eth';
-      case 'BTC':
-        return '/historical_btc';
-      default:
-        return '/historical';
-    }
+  const handlePanelChange = (panel) => (event, isExpanded) => {
+    setExpandedPanels(prev => ({
+      ...prev,
+      [panel]: isExpanded
+    }));
   };
 
   useEffect(() => {
@@ -74,7 +106,9 @@ function CryptoDetailApp() {
         const formattedStartDate = format(startDate, 'yyyy-MM-dd');
         const formattedEndDate = format(endDate, 'yyyy-MM-dd');
         
-        const endpointSuffix = getEndpointSuffix();
+        const endpointSuffix = base === 'ETH' ? '/historical_eth' :
+                              base === 'BTC' ? '/historical_btc' :
+                              '/historical';
         const url = `${API_URL}/crypto/${symbol}${endpointSuffix}?start_date=${formattedStartDate}&end_date=${formattedEndDate}`;
         
         const response = await fetch(url);
@@ -119,85 +153,161 @@ function CryptoDetailApp() {
     );
   }
 
+  const currentData = cryptoData?.current_data || {};
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box sx={{ p: 3 }}>
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'flex-start',
-            flexDirection: { xs: 'column', md: 'row' },
-            gap: 2,
-            mb: 3 
-          }}>
-            <Box>
-              <Typography variant="h4" gutterBottom>
-                {symbol} - {cryptoData?.crypto_name}
-              </Typography>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                {cryptoData?.stock_name}
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Technical Analysis ({base} Base)
-              </Typography>
-            </Box>
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 2,
-              flexWrap: 'wrap',
-              width: { xs: '100%', md: 'auto' }
-            }}>
-              <DatePicker
-                label="Start Date"
-                value={startDate}
-                onChange={setStartDate}
-                maxDate={endDate}
-                slotProps={{ textField: { size: "small" } }}
-              />
-              <DatePicker
-                label="End Date"
-                value={endDate}
-                onChange={setEndDate}
-                minDate={startDate}
-                maxDate={new Date()}
-                slotProps={{ textField: { size: "small" } }}
-              />
-            </Box>
+          {/* Header Section */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h4" gutterBottom>
+              {symbol} - {cryptoData?.crypto_name}
+            </Typography>
+            <Typography variant="h5" color="primary" gutterBottom>
+              {formatValue(currentData.close, base)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Data as of: {currentData.datetime ? format(new Date(currentData.datetime), 'PPpp') : 'N/A'}
+            </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Force Index ({base})
+          {/* Stats Dashboard */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard 
+                title="Volume (24h)" 
+                value={formatNumber(currentData.volume)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard 
+                title="Day's Range" 
+                value={`${formatValue(currentData.low, base)} - ${formatValue(currentData.high, base)}`}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard 
+                title="200 EMA" 
+                value={formatValue(currentData.ema, base)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard 
+                title="All-Time High" 
+                value={formatValue(currentData.all_time_high, base)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard 
+                title="ATH Distance" 
+                value={formatPercent(currentData.ath_percentage)}
+                suffix=" from ATH"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard 
+                title="3M Price Change" 
+                value={formatPercent(currentData.price_change_3m)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard 
+                title="6M Price Change" 
+                value={formatPercent(currentData.price_change_6m)}
+              />
+            </Grid>
+          </Grid>
+
+          {/* Date Filter Section */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'flex-start',
+            alignItems: 'center',
+            gap: 2,
+            mb: 3,
+            mt: 4,
+            borderTop: 1,
+            borderColor: 'divider',
+            pt: 3
+          }}>
+            <Typography variant="subtitle1" sx={{ mr: 2 }}>
+              Historical Data Range:
+            </Typography>
+            <DatePicker
+              label="Start Date"
+              value={startDate}
+              onChange={setStartDate}
+              maxDate={endDate}
+              slotProps={{ textField: { size: "small" } }}
+            />
+            <DatePicker
+              label="End Date"
+              value={endDate}
+              onChange={setEndDate}
+              minDate={startDate}
+              maxDate={new Date()}
+              slotProps={{ textField: { size: "small" } }}
+            />
+          </Box>
+
+          {/* Graphs Section */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Accordion 
+              expanded={expandedPanels.price}
+              onChange={handlePanelChange('price')}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Price History</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Historical price movement with volume and 200-day EMA overlay.
                 </Typography>
+                <CryptoPriceGraph 
+                  data={cryptoData?.price_history || []} 
+                  base={base}
+                />
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion 
+              expanded={expandedPanels.force}
+              onChange={handlePanelChange('force')}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Force Index</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
                 <Typography variant="body2" color="text.secondary" paragraph>
                   The Force Index combines price and volume to measure the strength of price movements.
                   Crossovers between the 4-week and 14-week EMAs can signal potential trend changes.
                 </Typography>
                 <ForceIndexGraph 
-                  data={cryptoData?.data || []} 
+                  data={cryptoData?.technical_data || []} 
                   base={base}
                   formatValue={formatValue}
                 />
-              </CardContent>
-            </Card>
+              </AccordionDetails>
+            </Accordion>
 
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Williams %R
-                </Typography>
+            <Accordion 
+              expanded={expandedPanels.williams}
+              onChange={handlePanelChange('williams')}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Williams %R</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
                 <Typography variant="body2" color="text.secondary" paragraph>
                   Williams %R is a momentum indicator that measures overbought and oversold levels.
                   Values below -50 combined with a Williams %R crossover above its EMA can signal potential buying opportunities.
                 </Typography>
                 <WilliamsRGraph 
-                  data={cryptoData?.data || []} 
+                  data={cryptoData?.technical_data || []} 
                 />
-              </CardContent>
-            </Card>
+              </AccordionDetails>
+            </Accordion>
           </Box>
         </Paper>
       </Box>
