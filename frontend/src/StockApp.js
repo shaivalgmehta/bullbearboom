@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { CircularProgress, IconButton } from '@mui/material';
 import axios from 'axios';
@@ -244,6 +244,8 @@ function StockApp({ drawerOpen, toggleDrawer }) {
   const [hasFilterChanges, setHasFilterChanges] = useState(false);
   const [filters, setFilters] = useState(loadSavedFilters());
   const [pendingFilters, setPendingFilters] = useState(loadSavedFilters());
+  const prevFilters = useRef(filters);
+  const prevDate = useRef(selectedDate);
 
 // Utility functions
   const hasActiveFilters = useCallback(() => {
@@ -298,17 +300,60 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     }
   }, [selectedDate, page, pageSize, sortConfig, filters]);
 
-  useEffect(() => {
-    if (page === 1) {
-      fetchData();
-    } else {
-      setPage(1); // This will trigger the fetch through the page effect
-    }
-  }, [filters, selectedDate, fetchData]);
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      
+      const params = new URLSearchParams({
+        date: formattedDate,
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+        sortColumn: sortConfig.key || 'stock',
+        sortDirection: sortConfig.direction === 'ascending' ? 'ASC' : 'DESC'
+      });
 
-  useEffect(() => {
-    fetchData();
-  }, [page, pageSize, sortConfig, fetchData]);
+      // Add numerical filters
+      Object.entries(filters.numerical).forEach(([key, value]) => {
+        if (value?.min !== undefined) params.append(`min_${key}`, value.min);
+        if (value?.max !== undefined) params.append(`max_${key}`, value.max);
+      });
+
+      // Add text filters
+      Object.entries(filters.text).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+
+      // Add alert state filters
+      Object.entries(filters.alerts).forEach(([key, values]) => {
+        values.forEach(value => {
+          params.append(`${key}[]`, value);
+        });
+      });
+
+      const result = await axios.get(`${API_URL}/stocks/latest?${params}`);
+      
+      setStockData(result.data.data);
+      setTotalPages(result.data.totalPages);
+      setTotalCount(result.data.totalCount);
+    } catch (error) {
+      console.error("Error fetching stock data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reset to page 1 only when filters or date changes
+  if ((filters !== prevFilters.current || selectedDate !== prevDate.current) && page !== 1) {
+    prevFilters.current = filters;
+    prevDate.current = selectedDate;
+    setPage(1);
+    return; // Don't fetch yet, let the page change trigger the fetch
+  }
+
+  loadData();
+}, [filters, selectedDate, page, pageSize, sortConfig]);
 
   // Filter handlers
   const handleNumericFilterChange = (column, value, type) => {
