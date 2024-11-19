@@ -200,7 +200,7 @@ function CryptoDetailApp() {
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <StatCard 
-                title="ATH Distance" 
+                title="% of ATH" 
                 value={formatPercent(currentData.ath_percentage)}
                 suffix=" from ATH"
               />

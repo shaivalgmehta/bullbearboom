@@ -1,27 +1,35 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { CircularProgress } from '@mui/material';
-import { debounce } from 'lodash';
+import { CircularProgress, IconButton } from '@mui/material';
 import axios from 'axios';
 import { 
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, List, ListItem,
-  Divider, useMediaQuery, useTheme, Grid, Checkbox, FormGroup, FormControlLabel,
+  Divider, useMediaQuery, useTheme, FormGroup, FormControlLabel,
   Tooltip, Select, MenuItem, OutlinedInput, TableContainer, Pagination,
-  FormControl, InputLabel
+  FormControl, InputLabel, Fab, Checkbox
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import ClearIcon from '@mui/icons-material/Clear';
 import { Link } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
+const drawerWidth = 300;
+
+const STORAGE_KEYS = {
+  FILTERS: 'stockAppFilters',
+  HIDDEN_COLUMNS: 'stockAppHiddenColumns',
+  PAGE_SIZE: 'stockAppPageSize'
+};
 
 const columnMap = {
   'stock': 'Stock',
   'stock_name': 'Stock Name',
   'market_cap': 'Market Cap',
-  'close': 'Last Day Closing Price',
+  'close': 'Closing Price',
   'pe_ratio': 'P/E Ratio',
   'ev_ebitda': 'EV/EBITDA',
   'pb_ratio': 'P/B Ratio',
@@ -73,8 +81,6 @@ const numericalColumns = [
 ];
 
 const filterColumns = [
-  'stock',
-  'stock_name',
   'market_cap',
   'pe_ratio',
   'ev_ebitda',
@@ -82,7 +88,6 @@ const filterColumns = [
   'peg_ratio',
   'current_quarter_sales',
   'current_quarter_ebitda',
-  'ema',
   'pe_ratio_rank',
   'ev_ebitda_rank',
   'pb_ratio_rank',
@@ -97,9 +102,57 @@ const filterColumns = [
   'shareholder_yield'
 ];
 
+const textFilterColumns = ['stock', 'stock_name'];
 const alertStateOptions = ['$', '$$$', '-'];
-const drawerWidth = 300;
+const initialAlertStates = {
+  williams_r_momentum_alert_state: [],
+  force_index_alert_state: [],
+  anchored_obv_alert_state: []
+};
 
+// Utilities for localStorage
+const loadSavedFilters = () => {
+  try {
+    const savedFilters = localStorage.getItem(STORAGE_KEYS.FILTERS);
+    return savedFilters ? JSON.parse(savedFilters) : {
+      numerical: {},
+      text: {},
+      alerts: {...initialAlertStates}
+    };
+  } catch (error) {
+    console.error('Error loading saved filters:', error);
+    return {
+      numerical: {},
+      text: {},
+      alerts: {...initialAlertStates}
+    };
+  }
+};
+
+const saveFilters = (newFilters) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.FILTERS, JSON.stringify(newFilters));
+  } catch (error) {
+    console.error('Error saving filters:', error);
+  }
+};
+
+const loadSavedSettings = () => {
+  try {
+    return {
+      hiddenColumns: JSON.parse(localStorage.getItem(STORAGE_KEYS.HIDDEN_COLUMNS)) || [],
+      pageSize: parseInt(localStorage.getItem(STORAGE_KEYS.PAGE_SIZE)) || 100
+    };
+  } catch (error) {
+    console.error('Error loading saved settings:', error);
+    return {
+      hiddenColumns: [],
+      pageSize: 100
+    };
+  }
+};
+
+// Formatting functions
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return 'N/A';
   return new Intl.NumberFormat('en-US', {
@@ -172,26 +225,36 @@ const formatColumnValue = (column, value) => {
 };
 
 function StockApp({ drawerOpen, toggleDrawer }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const savedSettings = loadSavedSettings();
+
+  // State declarations
   const [stockData, setStockData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100);
+  const [pageSize, setPageSize] = useState(savedSettings.pageSize);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [filters, setFilters] = useState({});
   const [selectedDate, setSelectedDate] = useState(
     new Date(new Date().setDate(new Date().getDate() - 1))
   );
-  const [alertStateFilters, setAlertStateFilters] = useState({
-    williams_r_momentum_alert_state: [],
-    force_index_alert_state: [],
-    anchored_obv_alert_state: []
-  });
+  const [hiddenColumns, setHiddenColumns] = useState(savedSettings.hiddenColumns);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
-  const [hiddenColumns, setHiddenColumns] = useState([]);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [hasFilterChanges, setHasFilterChanges] = useState(false);
+  const [filters, setFilters] = useState(loadSavedFilters());
+  const [pendingFilters, setPendingFilters] = useState(loadSavedFilters());
 
+// Utility functions
+  const hasActiveFilters = useCallback(() => {
+    return (
+      Object.keys(filters.numerical).length > 0 ||
+      Object.keys(filters.text).length > 0 ||
+      Object.values(filters.alerts).some(arr => arr.length > 0)
+    );
+  }, [filters]);
+
+  // Data fetching
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -205,18 +268,19 @@ function StockApp({ drawerOpen, toggleDrawer }) {
         sortDirection: sortConfig.direction === 'ascending' ? 'ASC' : 'DESC'
       });
 
-      // Add all filters
-      Object.entries(filters).forEach(([key, value]) => {
-        if (typeof value === 'string') {
-          params.append(key, value.toLowerCase());
-        } else if (value && typeof value === 'object') {
-          if (value.min !== undefined) params.append(`min_${key}`, value.min);
-          if (value.max !== undefined) params.append(`max_${key}`, value.max);
-        }
+      // Add numerical filters
+      Object.entries(filters.numerical).forEach(([key, value]) => {
+        if (value?.min !== undefined) params.append(`min_${key}`, value.min);
+        if (value?.max !== undefined) params.append(`max_${key}`, value.max);
+      });
+
+      // Add text filters
+      Object.entries(filters.text).forEach(([key, value]) => {
+        if (value) params.append(key, value);
       });
 
       // Add alert state filters
-      Object.entries(alertStateFilters).forEach(([key, values]) => {
+      Object.entries(filters.alerts).forEach(([key, values]) => {
         values.forEach(value => {
           params.append(`${key}[]`, value);
         });
@@ -232,62 +296,95 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, page, pageSize, sortConfig, filters, alertStateFilters]);
+  }, [selectedDate, page, pageSize, sortConfig, filters]);
 
-  const debouncedFetchData = useCallback(
-    debounce(() => fetchData(), 300),
-    [fetchData]
-  );
+  useEffect(() => {
+    if (page === 1) {
+      fetchData();
+    } else {
+      setPage(1); // This will trigger the fetch through the page effect
+    }
+  }, [filters, selectedDate, fetchData]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [page, pageSize, sortConfig, fetchData]);
 
-  const handleFilterChange = (column, value, type = null) => {
-    setPage(1);
-    if (type === null) {
-      setFilters(prevFilters => ({
-        ...prevFilters,
+  // Filter handlers
+  const handleNumericFilterChange = (column, value, type) => {
+    setPendingFilters(prev => ({
+      ...prev,
+      numerical: {
+        ...prev.numerical,
+        [column]: {
+          ...(prev.numerical[column] || {}),
+          [type]: value === '' ? undefined : value
+        }
+      }
+    }));
+    setHasFilterChanges(true);
+  };
+
+  const handleTextFilterChange = (column, value) => {
+    setPendingFilters(prev => ({
+      ...prev,
+      text: {
+        ...prev.text,
         [column]: value
-      }));
-    } else {
-      setFilters(prevFilters => ({
-        ...prevFilters,
-        [column]: { ...(prevFilters[column] || {}), [type]: value }
-      }));
-    }
-    debouncedFetchData();
+      }
+    }));
+    setHasFilterChanges(true);
   };
 
   const handleAlertStateFilterChange = (column, value) => {
-    setPage(1);
-    setAlertStateFilters(prevFilters => ({
-      ...prevFilters,
-      [column]: prevFilters[column].includes(value)
-        ? prevFilters[column].filter(v => v !== value)
-        : [...prevFilters[column], value]
+    setPendingFilters(prev => ({
+      ...prev,
+      alerts: {
+        ...prev.alerts,
+        [column]: prev.alerts[column].includes(value)
+          ? prev.alerts[column].filter(v => v !== value)
+          : [...prev.alerts[column], value]
+      }
     }));
-    debouncedFetchData();
+    setHasFilterChanges(true);
   };
 
-  const clearFilters = () => {
-    setFilters({});
-    setAlertStateFilters({
-      williams_r_momentum_alert_state: [],
-      force_index_alert_state: [],
-      anchored_obv_alert_state: []
-    });
-    setPage(1);
-    fetchData();
+  const applyPendingFilters = () => {
+    const newFilters = { ...pendingFilters };
+    setFilters(newFilters);
+    saveFilters(newFilters);
+    setHasFilterChanges(false);
   };
 
+  const clearAllFilters = () => {
+    const emptyFilters = {
+      numerical: {},
+      text: {},
+      alerts: {...initialAlertStates}
+    };
+    setPendingFilters(emptyFilters);
+    setFilters(emptyFilters);
+    saveFilters(emptyFilters);
+    setHasFilterChanges(false);
+  };
+
+  // Handler functions
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
   };
 
   const handlePageSizeChange = (event) => {
-    setPageSize(event.target.value);
+    const newPageSize = event.target.value;
+    setPageSize(newPageSize);
+    localStorage.setItem(STORAGE_KEYS.PAGE_SIZE, newPageSize.toString());
     setPage(1);
+  };
+
+  const handleColumnVisibilityChange = (event) => {
+    const { value } = event.target;
+    const newHiddenColumns = typeof value === 'string' ? value.split(',') : value;
+    setHiddenColumns(newHiddenColumns);
+    localStorage.setItem(STORAGE_KEYS.HIDDEN_COLUMNS, JSON.stringify(newHiddenColumns));
   };
 
   const requestSort = (key) => {
@@ -298,20 +395,14 @@ function StockApp({ drawerOpen, toggleDrawer }) {
     setSortConfig({ key, direction });
   };
 
-  const handleColumnVisibilityChange = (event) => {
-    const { value } = event.target;
-    setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
-  };
-
   const visibleColumns = Object.keys(columnMap).filter(
     column => !hiddenColumns.includes(column)
   );
-
-  const drawer = (
+const drawer = (
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2, mt: 8 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Filters</Typography>
+          <Typography variant="h6">Filters & Settings</Typography>
           <Button onClick={toggleDrawer}>
             <ChevronLeftIcon />
           </Button>
@@ -326,6 +417,49 @@ function StockApp({ drawerOpen, toggleDrawer }) {
       </Box>
       <Divider />
       <List>
+        {/* Text Filters */}
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            Text Filters
+          </Typography>
+          {textFilterColumns.map((column) => (
+            <Box key={column} sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label={columnMap[column]}
+                placeholder={`Filter ${columnMap[column]}`}
+                value={pendingFilters.text[column] || ''}
+                onChange={(e) => handleTextFilterChange(column, e.target.value)}
+              />
+            </Box>
+          ))}
+        </ListItem>
+
+        {/* Alert State Filters */}
+        {Object.entries(initialAlertStates).map(([column]) => (
+          <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+              {columnMap[column]}
+            </Typography>
+            <FormGroup>
+              {alertStateOptions.map((option) => (
+                <FormControlLabel
+                  key={option}
+                  control={
+                    <Checkbox
+                      checked={pendingFilters.alerts[column].includes(option)}
+                      onChange={() => handleAlertStateFilterChange(column, option)}
+                    />
+                  }
+                  label={option}
+                />
+              ))}
+            </FormGroup>
+          </ListItem>
+        ))}
+
+        {/* Column Visibility */}
         <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
             Hide Columns
@@ -347,66 +481,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
           </Select>
         </ListItem>
 
-        {filterColumns.map((column) => (
-          <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-              {columnMap[column]}
-            </Typography>
-            {column === 'stock' || column === 'stock_name' ? (
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={`Filter ${columnMap[column]}`}
-                onChange={(e) => handleFilterChange(column, e.target.value)}
-                value={filters[column] || ''}
-              />
-            ) : (
-              <Grid container spacing={1}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Min"
-                    type="number"
-                    onChange={(e) => handleFilterChange(column, parseFloat(e.target.value), 'min')}
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Max"
-                    type="number"
-                    onChange={(e) => handleFilterChange(column, parseFloat(e.target.value), 'max')}
-                  />
-                </Grid>
-              </Grid>
-            )}
-          </ListItem>
-        ))}
-
-        {Object.entries(alertStateFilters).map(([column, selectedValues]) => (
-          <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-              {columnMap[column]}
-            </Typography>
-            <FormGroup>
-              {alertStateOptions.map((option) => (
-                <FormControlLabel
-                  key={option}
-                  control={
-                    <Checkbox
-                      checked={selectedValues.includes(option)}
-                      onChange={() => handleAlertStateFilterChange(column, option)}
-                    />
-                  }
-                  label={option}
-                />
-              ))}
-            </FormGroup>
-          </ListItem>
-        ))}
-
+        {/* Page Size Selection */}
         <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
           <FormControl fullWidth size="small">
             <InputLabel>Rows per page</InputLabel>
@@ -423,14 +498,6 @@ function StockApp({ drawerOpen, toggleDrawer }) {
           </FormControl>
         </ListItem>
       </List>
-      <Box sx={{ mt: 2 }}>
-        <Button variant="contained" fullWidth onClick={fetchData} sx={{ mb: 1 }}>
-          Apply Filters
-        </Button>
-        <Button variant="outlined" fullWidth onClick={clearFilters}>
-          Clear Filters
-        </Button>
-      </Box>
     </Box>
   );
 
@@ -440,6 +507,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
       flexDirection: 'column', 
       height: 'calc(100vh - 64px)',
       overflow: 'hidden',
+      position: 'relative'
     }}>
       <Drawer
         variant={isMobile ? "temporary" : "persistent"}
@@ -456,6 +524,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
       >
         {drawer}
       </Drawer>
+
       <Box
         component="main"
         sx={{
@@ -475,162 +544,278 @@ function StockApp({ drawerOpen, toggleDrawer }) {
           }),
         }}
       >
-        <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto' }}>
-          {isLoading ? (
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center', 
-              height: '100%',
-              p: 4
-            }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {visibleColumns.map((key) => (
+        {/* Active Filters Indicator */}
+        {hasActiveFilters() && (
+          <Box sx={{ 
+            p: 1,
+            bgcolor: 'primary.light',
+            color: 'primary.contrastText',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2
+          }}>
+            <Typography variant="body2">
+              Filters are currently active
+            </Typography>
+          </Box>
+        )}
+
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer 
+            component={Paper} 
+            sx={{ 
+              flexGrow: 1, 
+              overflow: 'auto',
+              '& .MuiTableHead-root': {
+                position: 'sticky',
+                top: 0,
+                zIndex: 2,
+                backgroundColor: '#f5f5f5'
+              }
+            }}
+          >
+          <Table>
+            <TableHead>
+              <TableRow>
+                {visibleColumns.map((key) => (
+                  <TableCell 
+                    key={key}
+                    align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
+                    sx={{ 
+                      padding: '8px 12px',
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold',
+                      backgroundColor: '#f5f5f5',
+                      borderRight: '1px solid rgba(224, 224, 224, 1)',
+                      '&:last-child': {
+                        borderRight: 'none'
+                      },
+                      ...(key === 'stock_name' && { width: '200px' })
+                    }}
+                  >
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" 
+                    }}>
+                      {columnMap[key]}
+                      {(numericalColumns.includes(key) || key === 'datetime') && (
+                        <IconButton size="small" onClick={() => requestSort(key)}>
+                          {sortConfig.key === key ? (
+                            sortConfig.direction === 'ascending' ? (
+                              <ArrowUpwardIcon fontSize="small" />
+                            ) : (
+                              <ArrowDownwardIcon fontSize="small" />
+                            )
+                          ) : (
+                            <ArrowUpwardIcon fontSize="small" color="disabled" />
+                          )}
+                        </IconButton>
+                      )}
+                    </Box>
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                {visibleColumns.map((key) => (
+                  <TableCell 
+                    key={`filter-${key}`}
+                    align="center"
+                    sx={{ 
+                      padding: '4px 8px',
+                      backgroundColor: '#f5f5f5',
+                      borderRight: '1px solid rgba(224, 224, 224, 1)',
+                      '&:last-child': {
+                        borderRight: 'none'
+                      }
+                    }}
+                  >
+                    {filterColumns.includes(key) && numericalColumns.includes(key) && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <TextField
+                          placeholder="Min"
+                          size="small"
+                          type="number"
+                          value={pendingFilters.numerical[key]?.min || ''}
+                          onChange={(e) => handleNumericFilterChange(key, e.target.value, 'min')}
+                          sx={{ 
+                            '& .MuiInputBase-input': { 
+                              padding: '4px 8px',
+                              fontSize: '0.75rem'
+                            }
+                          }}
+                        />
+                        <TextField
+                          placeholder="Max"
+                          size="small"
+                          type="number"
+                          value={pendingFilters.numerical[key]?.max || ''}
+                          onChange={(e) => handleNumericFilterChange(key, e.target.value, 'max')}
+                          sx={{ 
+                            '& .MuiInputBase-input': { 
+                              padding: '4px 8px',
+                              fontSize: '0.75rem'
+                            }
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {stockData.map((stock, index) => (
+                <TableRow 
+                  key={`${stock.stock}-${index}`} 
+                  hover
+                  sx={{
+                    '&:nth-of-type(odd)': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                    },
+                  }}
+                >
+                  {visibleColumns.map((column) => (
                     <TableCell 
-                      key={key}
-                      align={key === 'stock' || key === 'stock_name' ? "left" : "center"}
+                      key={column}
+                      align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
                       sx={{ 
                         whiteSpace: 'nowrap', 
                         padding: '8px 12px',
-                        fontSize: '0.9rem',
-                        fontWeight: 'bold',
-                        backgroundColor: '#f8f9fa',
-                        ...(key === 'stock_name' && { width: '200px' })
+                        fontSize: '0.85rem',
+                        borderRight: '1px solid rgba(224, 224, 224, 1)',
+                        '&:last-child': {
+                          borderRight: 'none'
+                        },
+                        ...(column === 'stock_name' && {
+                          maxWidth: '200px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        })
                       }}
                     >
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: key === 'stock' || key === 'stock_name' ? "flex-start" : "center" 
-                      }}>
-                        {columnMap[key]}
-                        {(numericalColumns.includes(key) || key === 'datetime') && (
-                          <Button size="small" onClick={() => requestSort(key)}>
-                            {sortConfig.key === key ? (
-                              sortConfig.direction === 'ascending' ? (
-                                <ArrowUpwardIcon fontSize="inherit" />
-                              ) : (
-                                <ArrowDownwardIcon fontSize="inherit" />
-                              )
-                            ) : (
-                              <ArrowUpwardIcon fontSize="inherit" color="disabled" />
-                            )}
-                          </Button>
-                        )}
-                      </Box>
+                      {column === 'stock' ? (
+                        <Link 
+                          to={`/stock/${stock[column]}`}
+                          style={{ 
+                            color: '#1976d2', 
+                            textDecoration: 'none',
+                            '&:hover': {
+                              textDecoration: 'underline'
+                            }
+                          }}
+                        >
+                          {formatColumnValue(column, stock[column])}
+                        </Link>
+                      ) : column === 'stock_name' ? (
+                        <Tooltip title={stock[column]} placement="top">
+                          <span>{formatColumnValue(column, stock[column])}</span>
+                        </Tooltip>
+                      ) : ['price_change_3m', 'price_change_6m', 'price_change_12m'].includes(column) ? (
+                        <span style={{ 
+                          color: stock[column] > 0 ? '#4caf50' : stock[column] < 0 ? '#f44336' : 'inherit'
+                        }}>
+                          {formatColumnValue(column, stock[column])}
+                        </span>
+                      ) : (
+                        formatColumnValue(column, stock[column])
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {stockData.map((stock, index) => (
-                  <TableRow 
-                    key={`${stock.stock}-${index}`} 
-                    hover
-                    sx={{
-                      '&:nth-of-type(odd)': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                      },
-                    }}
-                  >
-                    {visibleColumns.map((column) => (
-                      <TableCell 
-                        key={column}
-                        align={column === 'stock' || column === 'stock_name' ? "left" : "center"}
-                        sx={{ 
-                          whiteSpace: 'nowrap', 
-                          padding: '8px 12px',
-                          fontSize: '0.85rem',
-                          ...(column === 'stock_name' && {
-                            maxWidth: '200px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          })
-                        }}
-                      >
-                        {column === 'stock' ? (
-                          <Link 
-                            to={`/stock/${stock[column]}`}
-                            style={{ 
-                              color: '#1976d2', 
-                              textDecoration: 'none',
-                              '&:hover': {
-                                textDecoration: 'underline'
-                              }
-                            }}
-                          >
-                            {formatColumnValue(column, stock[column])}
-                          </Link>
-                        ) : column === 'stock_name' ? (
-                          <Tooltip title={stock[column]} placement="top">
-                            <span>{formatColumnValue(column, stock[column])}</span>
-                          </Tooltip>
-                        ) : ['price_change_3m', 'price_change_6m', 'price_change_12m'].includes(column) ? (
-                          <span style={{ 
-                            color: stock[column] > 0 ? '#4caf50' : stock[column] < 0 ? '#f44336' : 'inherit'
-                          }}>
-                            {formatColumnValue(column, stock[column])}
-                          </span>
-                        ) : (
-                          formatColumnValue(column, stock[column])
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+              ))}
+            </TableBody>
+          </Table>
         </TableContainer>
+      )}
 
-        {/* Pagination Controls */}
+
         <Box sx={{ 
-          p: 2, 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          alignItems: 'center',
           borderTop: 1,
           borderColor: 'divider',
           backgroundColor: 'background.paper'
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2">
-              Total records: {totalCount}
-            </Typography>
-            <Typography variant="body2">
-              Page {page} of {totalPages}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <Select
-                value={pageSize}
-                onChange={handlePageSizeChange}
-                variant="outlined"
-                sx={{ height: 32 }}
-              >
-                <MenuItem value={50}>50 per page</MenuItem>
-                <MenuItem value={100}>100 per page</MenuItem>
-                <MenuItem value={250}>250 per page</MenuItem>
-                <MenuItem value={500}>500 per page</MenuItem>
-              </Select>
-            </FormControl>
-            <Pagination 
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              showFirstButton
-              showLastButton
-              size="small"
-              siblingCount={isMobile ? 0 : 1}
-              boundaryCount={isMobile ? 1 : 2}
-            />
+          {/* Filter Action Buttons */}
+          {(hasFilterChanges || hasActiveFilters()) && (
+            <Box sx={{
+              p: 1,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 2,
+              borderBottom: 1,
+              borderColor: 'divider'
+            }}>
+              {hasActiveFilters() && (
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  size="small"
+                  onClick={clearAllFilters}
+                  startIcon={<ClearIcon />}
+                >
+                  Clear Filters
+                </Button>
+              )}
+              {hasFilterChanges && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  onClick={applyPendingFilters}
+                  startIcon={<FilterAltIcon />}
+                >
+                  Apply Filters
+                </Button>
+              )}
+            </Box>
+          )}
+
+          {/* Pagination Section */}
+          <Box sx={{ 
+            p: 2, 
+            display: 'flex', 
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body2">
+                Total records: {totalCount}
+              </Typography>
+              <Typography variant="body2">
+                Page {page} of {totalPages}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <Select
+                  value={pageSize}
+                  onChange={handlePageSizeChange}
+                  variant="outlined"
+                  sx={{ height: 32 }}
+                >
+                  <MenuItem value={50}>50 per page</MenuItem>
+                  <MenuItem value={100}>100 per page</MenuItem>
+                  <MenuItem value={250}>250 per page</MenuItem>
+                  <MenuItem value={500}>500 per page</MenuItem>
+                </Select>
+              </FormControl>
+              <Pagination 
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                showFirstButton
+                showLastButton
+                size="small"
+                siblingCount={isMobile ? 0 : 1}
+                boundaryCount={isMobile ? 1 : 2}
+              />
+            </Box>
           </Box>
         </Box>
       </Box>

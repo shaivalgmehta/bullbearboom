@@ -78,7 +78,12 @@ def get_latest_stock_data():
         numeric_filters = [
             'market_cap', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio',
             'current_quarter_sales', 'current_quarter_ebitda', 'ema',
-            'price_change_3m', 'price_change_6m', 'price_change_12m'
+            'price_change_3m', 'price_change_6m', 'price_change_12m',
+            'earnings_yield', 'book_to_price',
+            'return_on_equity', 'return_on_assets', 'price_to_sales',
+            'free_cash_flow_yield', 'shareholder_yield',
+            'pe_ratio_rank', 'ev_ebitda_rank', 'pb_ratio_rank', 'peg_ratio_rank',
+            'earnings_yield_rank', 'book_to_price_rank', 'erp5_rank'
         ]
         alert_filters = [
             'williams_r_momentum_alert_state',
