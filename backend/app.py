@@ -12,7 +12,8 @@ from us_stocks.us_stock_screener_table_process import update_screener_table
 from crypto.crypto_screener_table_process import update_screener_table_usd
 from crypto.crypto_screener_table_process_btc import update_screener_table_btc
 from crypto.crypto_screener_table_process_eth import update_screener_table_eth
-
+import numpy as np
+from typing import Dict, List
 
 # Load environment variables
 load_dotenv()
@@ -1012,5 +1013,123 @@ def get_insider_stats(insider_name):
         logging.error(f"Error fetching insider statistics: {e}")
         return jsonify({"error": str(e)}), 500
         
+
+
+################## FIBONACCI LEVELS API ###################################
+
+def calculate_fibonacci_levels(all_time_high: float, all_time_low: float) -> Dict[str, float]:
+    """Calculate Fibonacci retracement and extension levels."""
+    diff = all_time_high - all_time_low
+    levels = {
+        "0": all_time_low,
+        "23.6": all_time_low + (diff * 0.236),
+        "38.2": all_time_low + (diff * 0.382),
+        "50.0": all_time_low + (diff * 0.5),
+        "61.8": all_time_low + (diff * 0.618),
+        "78.6": all_time_low + (diff * 0.786),
+        "100.0": all_time_high,
+        "161.8": all_time_high + (diff * 0.618),
+        "261.8": all_time_high + (diff * 1.618)
+    }
+    return levels
+
+def calculate_price_distances(current_price: float, fib_levels: Dict[str, float]) -> Dict[str, float]:
+    """Calculate percentage distance from current price to each Fibonacci level."""
+    distances = {}
+    for level, price in fib_levels.items():
+        if price != 0:  # Avoid division by zero
+            distance = ((current_price - price) / price) * 100
+            distances[level] = distance
+        else:
+            distances[level] = None
+    return distances
+
+@app.route('/api/crypto/fibonacci', methods=['GET'])
+def get_fibonacci_data():
+    try:
+        # Get date parameter, default to yesterday if not provided
+        date_str = request.args.get('date')
+        if date_str:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            selected_date = datetime.now().date() - timedelta(days=1)
+
+        # Get base currency from query parameter (default to USD)
+        base = request.args.get('base', 'usd').lower()
+        
+        # Select appropriate table based on base currency
+        table_name = f"crypto_daily_table{'_' + base if base != 'usd' else ''}"
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Execute query to get price data
+        cur.execute(f"""
+            WITH latest_prices AS (
+                SELECT DISTINCT ON (stock)
+                    stock,
+                    crypto_name,
+                    close as current_price,
+                    datetime as price_date
+                FROM {table_name}
+                WHERE DATE(datetime) = %s
+                ORDER BY stock, datetime DESC
+            ),
+            price_ranges AS (
+                SELECT 
+                    stock,
+                    MAX(high) as all_time_high,
+                    MIN(low) as all_time_low
+                FROM {table_name}
+                GROUP BY stock
+            )
+            SELECT 
+                l.stock,
+                l.crypto_name,
+                l.current_price,
+                l.price_date,
+                r.all_time_high,
+                r.all_time_low
+            FROM latest_prices l
+            JOIN price_ranges r ON l.stock = r.stock
+            WHERE LOWER(l.stock) LIKE '%%usd%%'
+            ORDER BY l.stock;
+        """, (selected_date,))
+        
+        raw_data = cur.fetchall()
+        
+        # Process data and calculate Fibonacci levels
+        fibonacci_data = []
+        for row in raw_data:
+            if row['all_time_high'] and row['all_time_low'] and row['current_price']:
+                fib_levels = calculate_fibonacci_levels(
+                    float(row['all_time_high']), 
+                    float(row['all_time_low'])
+                )
+                price_distances = calculate_price_distances(
+                    float(row['current_price']), 
+                    fib_levels
+                )
+                
+                fibonacci_data.append({
+                    'stock': row['stock'],
+                    'crypto_name': row['crypto_name'],
+                    'current_price': float(row['current_price']),
+                    'price_date': row['price_date'],
+                    'all_time_high': float(row['all_time_high']),
+                    'all_time_low': float(row['all_time_low']),
+                    'fibonacci_levels': fib_levels,
+                    'level_distances': price_distances
+                })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(fibonacci_data)
+        
+    except Exception as e:
+        logging.error(f"Error fetching Fibonacci data: {e}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

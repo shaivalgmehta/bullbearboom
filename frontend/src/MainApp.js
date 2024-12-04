@@ -12,6 +12,7 @@ import CryptoAlertsApp from './CryptoAlertsApp';
 import StockDetailApp from './StockDetailApp/StockDetailApp';
 import CryptoDetailApp from './CryptoDetailApp/CryptoDetailApp';
 import InsiderTradingApp from './InsiderTradingApp';
+import CryptoFibonacciApp from './CryptoFibonacciApp';
 
 
 function MainApp() {
@@ -130,6 +131,13 @@ function MainApp() {
                 >
                   BTC Base
                 </MenuItem>
+                <MenuItem 
+                  component={Link} 
+                  to="/crypto/fibonacci"
+                  onClick={handleCryptoMenuClose}
+                >
+                  Fibonacci Analysis
+                </MenuItem>
               </Menu>
             </Box>
           </Toolbar>
@@ -148,6 +156,7 @@ function MainApp() {
             <Route path="crypto_eth/:symbol" element={<CryptoDetailApp />} />
             <Route path="crypto_btc/:symbol" element={<CryptoDetailApp />} />
             <Route path="insider_trading" element={<InsiderTradingApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />
+            <Route path="crypto/fibonacci" element={<CryptoFibonacciApp drawerOpen={drawerOpen} toggleDrawer={toggleDrawer} />} />          
           </Routes>
         </Box>
       </Box>
