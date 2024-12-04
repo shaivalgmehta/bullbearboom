@@ -42,7 +42,8 @@ const columnMap = {
 
 const numericalColumns = [
   'current_price', 'all_time_high', 'all_time_low',
-  '23.6', '38.2', '50.0', '61.8', '78.6', '100.0', '161.8', '261.8'
+  '23.6', '38.2', '50.0', '61.8', '78.6', '100.0', '161.8', '261.8',
+  '23.6_distance', '38.2_distance', '50.0_distance', '61.8_distance', '78.6_distance', '100.0_distance', '161.8_distance', '261.8_distance'
 ];
 
 const filterColumns = [
