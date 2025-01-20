@@ -224,7 +224,7 @@ const formatColumnValue = (column, value) => {
   }
 };
 
-function StockApp({ drawerOpen, toggleDrawer }) {
+function IN_StockApp({ drawerOpen, toggleDrawer }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const savedSettings = loadSavedSettings();
@@ -288,7 +288,7 @@ function StockApp({ drawerOpen, toggleDrawer }) {
         });
       });
 
-      const result = await axios.get(`${API_URL}/stocks/latest?${params}`);
+      const result = await axios.get(`${API_URL}/in_stocks/latest?${params}`);
       
       setStockData(result.data.data);
       setTotalPages(result.data.totalPages);
@@ -332,7 +332,7 @@ useEffect(() => {
         });
       });
 
-      const result = await axios.get(`${API_URL}/stocks/latest?${params}`);
+      const result = await axios.get(`${API_URL}/in_stocks/latest?${params}`);
       
       setStockData(result.data.data);
       setTotalPages(result.data.totalPages);
@@ -746,7 +746,7 @@ const drawer = (
                     >
                       {column === 'stock' ? (
                         <Link 
-                          to={`/stock/${stock[column]}`}
+                          to={`/in_stock/${stock[column]}`}
                           style={{ 
                             color: '#1976d2', 
                             textDecoration: 'none',
@@ -868,4 +868,4 @@ const drawer = (
   );
 }
 
-export default StockApp;
+export default IN_StockApp;

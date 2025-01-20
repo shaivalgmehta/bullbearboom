@@ -8,7 +8,8 @@ import json
 from decimal import Decimal
 from datetime import datetime
 import logging
-from us_stocks.us_stock_screener_table_process import update_screener_table
+from us_stocks.us_stock_screener_table_process import update_us_screener_table
+from in_stocks.in_stock_screener_table_process import update_in_screener_table
 from crypto.crypto_screener_table_process import update_screener_table_usd
 from crypto.crypto_screener_table_process_btc import update_screener_table_btc
 from crypto.crypto_screener_table_process_eth import update_screener_table_eth
@@ -55,7 +56,8 @@ def get_db_connection():
         logging.error(f"Database connection failed: {e}")
         raise
 
-########### STOCK APIS #############################################
+
+########### US STOCK APIS #############################################
 @app.route('/api/stocks/latest')
 def get_latest_stock_data():
     logging.info("Fetching latest data for all stocks")
@@ -142,7 +144,7 @@ def get_latest_stock_data():
         where_clause = " AND ".join(where_conditions)
 
         # Update screener table for the selected date
-        update_screener_table(selected_date)
+        update_us_screener_table(selected_date)
         
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -314,6 +316,267 @@ def get_stock_historical_data(symbol):
     except Exception as e:
         logging.error(f"Error fetching historical data for {symbol}: {e}")
         return jsonify({"error": str(e)}), 500
+
+# ########### IN STOCK APIS #############################################
+@app.route('/api/in_stocks/latest')
+def get_latest_in_stock_data():
+    logging.info("Fetching latest data for all stocks")
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('pageSize', 100))
+        sort_column = request.args.get('sortColumn', 'datetime')
+        sort_direction = request.args.get('sortDirection', 'DESC')
+        
+        # Get date parameter
+        date_str = request.args.get('date')
+        if date_str:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            selected_date = datetime.now().date() - timedelta(days=1)
+
+        # Get filter parameters
+        filters = {}
+        text_filters = ['stock', 'stock_name']
+        numeric_filters = [
+            'market_cap', 'pe_ratio', 'ev_ebitda', 'pb_ratio', 'peg_ratio',
+            'current_quarter_sales', 'current_quarter_ebitda', 'ema',
+            'price_change_3m', 'price_change_6m', 'price_change_12m',
+            'earnings_yield', 'book_to_price',
+            'return_on_equity', 'return_on_assets', 'price_to_sales',
+            'free_cash_flow_yield', 'shareholder_yield',
+            'pe_ratio_rank', 'ev_ebitda_rank', 'pb_ratio_rank', 'peg_ratio_rank',
+            'earnings_yield_rank', 'book_to_price_rank', 'erp5_rank'
+        ]
+        alert_filters = [
+            'williams_r_momentum_alert_state',
+            'force_index_alert_state',
+            'anchored_obv_alert_state'
+        ]
+
+        # Process text filters
+        for column in text_filters:
+            value = request.args.get(column)
+            if value:
+                filters[column] = value.lower()
+
+        # Process numeric filters
+        for column in numeric_filters:
+            min_value = request.args.get(f'min_{column}')
+            max_value = request.args.get(f'max_{column}')
+            if min_value or max_value:
+                filters[column] = {
+                    'min': float(min_value) if min_value else None,
+                    'max': float(max_value) if max_value else None
+                }
+
+        # Process alert state filters
+        for column in alert_filters:
+            values = request.args.getlist(f'{column}[]')
+            if values:
+                filters[column] = values
+
+        # Calculate offset
+        offset = (page - 1) * page_size
+
+        # Build the WHERE clause dynamically
+        where_conditions = ["DATE(datetime) = DATE(%s)"]
+        params = [selected_date]
+
+        # Add text filters
+        for column, value in filters.items():
+            if column in text_filters:
+                where_conditions.append(f"LOWER({column}) LIKE %s")
+                params.append(f"%{value}%")
+            elif column in numeric_filters and isinstance(value, dict):
+                if value.get('min') is not None:
+                    where_conditions.append(f"{column} >= %s")
+                    params.append(value['min'])
+                if value.get('max') is not None:
+                    where_conditions.append(f"{column} <= %s")
+                    params.append(value['max'])
+            elif column in alert_filters:
+                if value:
+                    placeholders = ','.join(['%s'] * len(value))
+                    where_conditions.append(f"{column} IN ({placeholders})")
+                    params.extend(value)
+
+        where_clause = " AND ".join(where_conditions)
+
+        # Update screener table for the selected date
+        update_in_screener_table(selected_date)
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get total count
+        count_query = f"""
+            SELECT COUNT(*) 
+            FROM in_screener_table 
+            WHERE {where_clause}
+        """
+        cur.execute(count_query, params)
+        total_count = cur.fetchone()['count']
+        
+        # Get paginated data
+        query = f"""
+            SELECT *
+            FROM in_screener_table
+            WHERE {where_clause}
+            ORDER BY {sort_column} {sort_direction}
+            LIMIT %s OFFSET %s
+        """
+        cur.execute(query, params + [page_size, offset])
+        data = cur.fetchall()
+        
+        response = {
+            'data': data,
+            'totalCount': total_count,
+            'page': page,
+            'pageSize': page_size,
+            'totalPages': -(-total_count // page_size)  # Ceiling division
+        }
+        
+        logging.info(f"Fetched page {page} of stock data for date {selected_date}")
+        cur.close()
+        conn.close()
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logging.error(f"Error fetching stock data: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/in_stocks/alerts')
+def get_in_alerts_data():
+    logging.info("Fetching alerts for all stocks")
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                query = """
+                    SELECT *
+                    FROM in_alerts_table
+                    WHERE datetime >= NOW() - INTERVAL '30 days'
+                    ORDER BY datetime DESC
+                """
+                
+                cur.execute(query)
+                data = cur.fetchall()
+                
+                logging.info(f"Fetched {len(data)} alerts from the last 30 days")
+                return jsonify(data)
+                
+    except Exception as e:
+        logging.error(f"Error fetching alerts data: {e}")
+        return jsonify({"error": "Failed to fetch alerts data"}), 500
+
+@app.route('/api/in_stocks/<symbol>/historical')
+def get_in_stock_historical_data(symbol):
+    logging.info(f"Fetching historical data for stock {symbol}")
+    try:
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Query for technical indicators (existing)
+        cur.execute("""
+            SELECT 
+                datetime,
+                force_index_7_week,
+                force_index_52_week,
+                williams_r,
+                williams_r_ema
+            FROM in_weekly_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        technical_data = cur.fetchall()
+        
+        # Query for price history
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                ema
+            FROM in_daily_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        price_history = cur.fetchall()
+
+        # Get latest daily data
+        cur.execute("""
+            SELECT 
+                datetime,
+                close,
+                market_cap,
+                pe_ratio,
+                ev_ebitda,
+                pb_ratio,
+                peg_ratio,
+                price_change_3m,
+                price_change_6m,
+                price_change_12m,
+                ema,
+                volume,
+                high,
+                low,
+                open
+            FROM in_daily_table
+            WHERE stock = %s
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, (symbol,))
+        
+        current_data = cur.fetchone()
+        
+        # Also fetch basic stock info (existing)
+        cur.execute("""
+            SELECT DISTINCT stock_name
+            FROM in_daily_table
+            WHERE stock = %s
+            LIMIT 1
+        """, (symbol,))
+        stock_info = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not technical_data and not price_history:
+            return jsonify({
+                "error": f"No data found for stock {symbol}"
+            }), 404
+            
+        return jsonify({
+            "symbol": symbol,
+            "stock_name": stock_info['stock_name'] if stock_info else None,
+            "current_data": current_data,
+            "technical_data": technical_data,
+            "price_history": price_history
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 ################## CRYPTO APIS #############################################
 @app.route('/api/crypto/latest')
@@ -803,7 +1066,7 @@ def get_crypto_historical_data_btc(symbol):
         logging.error(f"Error fetching historical BTC base data for {symbol}: {e}")
         return jsonify({"error": str(e)}), 500
 
-############## INSIDER TRADING API ##############################################
+############## US INSIDER TRADING API ##############################################
 @app.route('/api/stocks/insider')
 def get_insider_trading_data():
     logging.info("Fetching insider trading data")

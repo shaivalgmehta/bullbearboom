@@ -14,7 +14,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { Link } from 'react-router-dom';
 import { debounce } from 'lodash';
-import InsiderStatsModal from './InsiderStatsModal';
+import IN_InsiderStatsModal from './IN_InsiderStatsModal';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -126,7 +126,7 @@ const formatColumnValue = (column, value, rowData) => {
   }
 };
 
-function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
+function IN_InsiderTradingApp({ drawerOpen, toggleDrawer }) {
   const [insiderData, setInsiderData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -153,7 +153,7 @@ function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
     setIsStatsLoading(true);
     setStatsError(null);
     try {
-      const response = await axios.get(`${API_URL}/stocks/insider/stats/${encodeURIComponent(insiderName)}`);
+      const response = await axios.get(`${API_URL}/in_stocks/insider/stats/${encodeURIComponent(insiderName)}`);
       setInsiderStats(response.data);
     } catch (error) {
       setStatsError(error.response?.data?.error || 'Failed to fetch insider statistics');
@@ -206,7 +206,7 @@ function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
         });
       }
 
-      const result = await axios.get(`${API_URL}/stocks/insider?${params}`);
+      const result = await axios.get(`${API_URL}/in_stocks/insider?${params}`);
       setInsiderData(result.data.data);
       setTotalPages(result.data.totalPages);
       setTotalCount(result.data.totalCount);
@@ -442,7 +442,7 @@ function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
       </Drawer>
 
       {/* Insider Stats Modal */}
-      <InsiderStatsModal
+      <IN_InsiderStatsModal
         open={Boolean(selectedInsider)}
         onClose={handleModalClose}
         insiderName={selectedInsider}
@@ -552,7 +552,7 @@ function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
                       >
                         {column === 'stock' ? (
                           <Link 
-                            to={`/stock/${trade[column]}`}
+                            to={`/in_stock/${trade[column]}`}
                             style={{ 
                               color: '#1976d2', 
                               textDecoration: 'none',
@@ -652,4 +652,4 @@ function InsiderTradingApp({ drawerOpen, toggleDrawer }) {
   );
 }
 
-export default InsiderTradingApp;
+export default IN_InsiderTradingApp;

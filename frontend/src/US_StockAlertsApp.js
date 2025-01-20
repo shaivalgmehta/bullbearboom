@@ -27,7 +27,7 @@ const alertStateOptions = ['$$$']; // For oversold_alert
 const obvAlertOptions = ['$$$', '-$$$', '-']; // For OBV alerts
 const drawerWidth = 300;
 
-function StockAlertsApp({ drawerOpen, toggleDrawer }) {
+function US_StockAlertsApp({ drawerOpen, toggleDrawer }) {
   const [alertsData, setAlertsData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({});
@@ -341,7 +341,7 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
                       >
                         {column === 'stock' ? (
                           <Link 
-                            to={`/stock/${alert[column]}`}  // Add leading slash for absolute path
+                            to={`/us_stock/${alert[column]}`}  // Add leading slash for absolute path
                             style={{ 
                               color: '#1976d2', 
                               textDecoration: 'none'
@@ -369,4 +369,4 @@ function StockAlertsApp({ drawerOpen, toggleDrawer }) {
   );
 }
 
-export default StockAlertsApp;
+export default US_StockAlertsApp;

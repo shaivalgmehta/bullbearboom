@@ -19,21 +19,21 @@ DB_CONFIG = {
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-def update_us_screener_table(selected_date=None):
+def update_in_screener_table(selected_date=None):
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get today's date and yesterday's date
-            target_date = selected_date if selected_date else datetime.now().date() - timedelta(days=3)
+            target_date = selected_date if selected_date else datetime.now().date() - timedelta(days=1)
 
             # today = datetime.now().date()
             # yesterday = today - timedelta(days=1)
             
             # Step 1: Clear the screener table
-            cur.execute("TRUNCATE TABLE us_screener_table")
+            cur.execute("TRUNCATE TABLE in_screener_table")
 
             # Step 2: Insert latest daily data (today or yesterday)
             cur.execute("""
-                INSERT INTO us_screener_table (
+                INSERT INTO in_screener_table (
                     datetime, stock, stock_name, close, pe_ratio, pb_ratio, peg_ratio, ema, pe_ratio_rank,
                 pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
                 price_change_3m, price_change_6m, price_change_12m, erp5_rank
@@ -43,7 +43,7 @@ def update_us_screener_table(selected_date=None):
                 pb_ratio_rank, peg_ratio_rank, earnings_yield, book_to_price, earnings_yield_rank, book_to_price_rank,
                 price_change_3m, price_change_6m, price_change_12m, erp5_rank
                 FROM 
-                    us_daily_table
+                    in_daily_table
                 WHERE 
                     DATE(datetime) BETWEEN %s AND %s
                 ORDER BY 
@@ -56,11 +56,11 @@ def update_us_screener_table(selected_date=None):
                     SELECT DISTINCT ON (stock)
                         stock, datetime, williams_r, williams_r_ema, williams_r_momentum_alert_state,
                         force_index_7_week, force_index_52_week, force_index_alert_state, anchored_obv_alert_state
-                    FROM us_weekly_table
+                    FROM in_weekly_table
                     WHERE datetime > %s
                     ORDER BY stock, datetime DESC
                 )
-                UPDATE us_screener_table s
+                UPDATE in_screener_table s
                 SET 
                     williams_r = w.williams_r,
                     williams_r_ema = w.williams_r_ema,
@@ -105,13 +105,13 @@ def update_us_screener_table(selected_date=None):
                         SELECT 
                             *, 
                             ROW_NUMBER() OVER (PARTITION BY stock ORDER BY datetime DESC) as rn
-                        FROM us_quarterly_table
+                        FROM in_quarterly_table
                         WHERE datetime > %s
                     ) sq
                     WHERE rn <= 2
                     GROUP BY stock
                 )
-                UPDATE us_screener_table s
+                UPDATE in_screener_table s
                 SET 
                     last_quarter_sales = lq.last_quarter_sales,
                     current_quarter_sales = lq.current_quarter_sales,
@@ -151,5 +151,5 @@ def update_us_screener_table(selected_date=None):
             conn.commit()
 
 if __name__ == "__main__":
-    update_us_screener_table()
-    print("us_screener_table has been updated successfully.")
+    update_in_screener_table()
+    print("in_screener_table has been updated successfully.")

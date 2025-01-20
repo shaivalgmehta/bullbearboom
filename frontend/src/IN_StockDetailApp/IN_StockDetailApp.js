@@ -65,7 +65,7 @@ const formatRatio = (value) => {
   return value.toFixed(2);
 };
 
-function StockDetailApp() {
+function US_StockDetailApp() {
   const { symbol } = useParams();
   const [stockData, setStockData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -88,7 +88,7 @@ function StockDetailApp() {
         const formattedStartDate = format(startDate, 'yyyy-MM-dd');
         const formattedEndDate = format(endDate, 'yyyy-MM-dd');
         
-        const url = `${API_URL}/stocks/${symbol}/historical?start_date=${formattedStartDate}&end_date=${formattedEndDate}`;
+        const url = `${API_URL}/in_stocks/${symbol}/historical?start_date=${formattedStartDate}&end_date=${formattedEndDate}`;
         
         const response = await fetch(url);
         
@@ -315,4 +315,4 @@ function StockDetailApp() {
   );
 }
 
-export default StockDetailApp;
+export default US_StockDetailApp;

@@ -72,7 +72,7 @@ const formatDate = (dateString) => {
 };
 
 // Main Component
-const InsiderStatsModal = ({ open, onClose, insiderName, stats, isLoading, error }) => {
+const IN_InsiderStatsModal = ({ open, onClose, insiderName, stats, isLoading, error }) => {
   // State for pagination and sorting
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -337,4 +337,4 @@ const InsiderStatsModal = ({ open, onClose, insiderName, stats, isLoading, error
   );
 };
 
-export default InsiderStatsModal;
+export default IN_InsiderStatsModal;
