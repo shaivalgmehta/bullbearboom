@@ -129,7 +129,7 @@ def process_stock_batch(batch, end_date):
 def main():
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data()
-    end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=3)
+    end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
     # Limit to first 3 stocks
     # stocks = stocks[:1]
 
