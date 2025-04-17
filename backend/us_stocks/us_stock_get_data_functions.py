@@ -95,6 +95,7 @@ def fetch_missing_data_from_twelve_data(symbol: str, start_date: str, end_date: 
         end_date=end_date,
         country="United States",
         type="Common Stock",
+        timezone="UTC",
         outputsize =500
     ).as_json()
     if time_series:

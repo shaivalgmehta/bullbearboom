@@ -28,6 +28,7 @@ def process_stock(stock: Dict[str, Any], start_date: str, end_date: str, daily_d
 
         daily_data = fetch_missing_data_from_twelve_data(symbol, start_date, end_date)
         if daily_data is not None and not daily_data.empty:
+
             # Combine data for daily table
             combined_data = {
                 'stock_data': stock,
@@ -56,7 +57,6 @@ def run_stock_data_process(end_date: datetime, batch_size: int = 500):
     # start_date = (datetime.now() - timedelta(days=1) - timedelta(weeks=104)).strftime('%Y-%m-%d')
     start_date = end_date.strftime('%Y-%m-%d')
     end_date = (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
- 
 
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data()
