@@ -194,7 +194,11 @@ def get_alerts_data():
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = """
-                    SELECT *
+                    SELECT 
+                        datetime,
+                        stock,
+                        stock_name,
+                        alerts
                     FROM us_alerts_table
                     WHERE datetime >= NOW() - INTERVAL '30 days'
                     ORDER BY datetime DESC
@@ -203,8 +207,20 @@ def get_alerts_data():
                 cur.execute(query)
                 data = cur.fetchall()
                 
-                logging.info(f"Fetched {len(data)} alerts from the last 30 days")
-                return jsonify(data)
+                # Process the data to ensure alerts is properly parsed from JSON
+                processed_data = []
+                for row in data:
+                    # Ensure alerts is in the correct format (parsed JSON)
+                    if isinstance(row['alerts'], str):
+                        try:
+                            row['alerts'] = json.loads(row['alerts'])
+                        except json.JSONDecodeError:
+                            row['alerts'] = []
+                    
+                    processed_data.append(row)
+                
+                logging.info(f"Fetched {len(processed_data)} alerts from the last 30 days")
+                return jsonify(processed_data)
                 
     except Exception as e:
         logging.error(f"Error fetching alerts data: {e}")
@@ -449,12 +465,16 @@ def get_latest_in_stock_data():
 
 @app.route('/api/in_stocks/alerts')
 def get_in_alerts_data():
-    logging.info("Fetching alerts for all stocks")
+    logging.info("Fetching alerts for all Indian stocks")
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = """
-                    SELECT *
+                    SELECT 
+                        datetime,
+                        stock,
+                        stock_name,
+                        alerts
                     FROM in_alerts_table
                     WHERE datetime >= NOW() - INTERVAL '30 days'
                     ORDER BY datetime DESC
@@ -463,12 +483,24 @@ def get_in_alerts_data():
                 cur.execute(query)
                 data = cur.fetchall()
                 
-                logging.info(f"Fetched {len(data)} alerts from the last 30 days")
-                return jsonify(data)
+                # Process the data to ensure alerts is properly parsed from JSON
+                processed_data = []
+                for row in data:
+                    # Ensure alerts is in the correct format (parsed JSON)
+                    if isinstance(row['alerts'], str):
+                        try:
+                            row['alerts'] = json.loads(row['alerts'])
+                        except json.JSONDecodeError:
+                            row['alerts'] = []
+                    
+                    processed_data.append(row)
+                
+                logging.info(f"Fetched {len(processed_data)} alerts for Indian stocks from the last 30 days")
+                return jsonify(processed_data)
                 
     except Exception as e:
-        logging.error(f"Error fetching alerts data: {e}")
-        return jsonify({"error": "Failed to fetch alerts data"}), 500
+        logging.error(f"Error fetching India alerts data: {e}")
+        return jsonify({"error": "Failed to fetch India alerts data"}), 500
 
 @app.route('/api/in_stocks/<symbol>/historical')
 def get_in_stock_historical_data(symbol):
@@ -693,20 +725,38 @@ def get_crypto_alerts():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get the last 7 days of alerts
+        # Get the last 10 days of alerts
         cur.execute("""
-            SELECT *
+            SELECT 
+                datetime,
+                stock,
+                crypto_name,
+                alerts
             FROM crypto_alerts_table
             WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
             ORDER BY datetime DESC
         """)
         
         alerts = cur.fetchall()
+        
+        # Process the data to ensure alerts is properly parsed from JSON
+        processed_alerts = []
+        for row in alerts:
+            # Ensure alerts is in the correct format (parsed JSON)
+            if isinstance(row['alerts'], str):
+                try:
+                    row['alerts'] = json.loads(row['alerts'])
+                except json.JSONDecodeError:
+                    row['alerts'] = []
+            
+            processed_alerts.append(row)
+        
         cur.close()
         conn.close()
         
-        return jsonify(alerts)
+        return jsonify(processed_alerts)
     except Exception as e:
+        logging.error(f"Error fetching crypto alerts: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/crypto/alerts_eth', methods=['GET'])
@@ -715,20 +765,38 @@ def get_crypto_alerts_eth():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get the last 7 days of ETH-based alerts
+        # Get the last 10 days of ETH-based alerts
         cur.execute("""
-            SELECT *
+            SELECT 
+                datetime,
+                stock,
+                crypto_name,
+                alerts
             FROM crypto_alerts_table_eth
             WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
             ORDER BY datetime DESC
         """)
         
         alerts = cur.fetchall()
+        
+        # Process the data to ensure alerts is properly parsed from JSON
+        processed_alerts = []
+        for row in alerts:
+            # Ensure alerts is in the correct format (parsed JSON)
+            if isinstance(row['alerts'], str):
+                try:
+                    row['alerts'] = json.loads(row['alerts'])
+                except json.JSONDecodeError:
+                    row['alerts'] = []
+            
+            processed_alerts.append(row)
+        
         cur.close()
         conn.close()
         
-        return jsonify(alerts)
+        return jsonify(processed_alerts)
     except Exception as e:
+        logging.error(f"Error fetching ETH-based crypto alerts: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/crypto/alerts_btc', methods=['GET'])
@@ -737,20 +805,38 @@ def get_crypto_alerts_btc():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get the last 7 days of BTC-based alerts
+        # Get the last 10 days of BTC-based alerts
         cur.execute("""
-            SELECT *
+            SELECT 
+                datetime,
+                stock,
+                crypto_name,
+                alerts
             FROM crypto_alerts_table_btc
             WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
             ORDER BY datetime DESC
         """)
         
         alerts = cur.fetchall()
+        
+        # Process the data to ensure alerts is properly parsed from JSON
+        processed_alerts = []
+        for row in alerts:
+            # Ensure alerts is in the correct format (parsed JSON)
+            if isinstance(row['alerts'], str):
+                try:
+                    row['alerts'] = json.loads(row['alerts'])
+                except json.JSONDecodeError:
+                    row['alerts'] = []
+            
+            processed_alerts.append(row)
+        
         cur.close()
         conn.close()
         
-        return jsonify(alerts)
+        return jsonify(processed_alerts)
     except Exception as e:
+        logging.error(f"Error fetching BTC-based crypto alerts: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/crypto/<symbol>/historical')

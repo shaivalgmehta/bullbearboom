@@ -5,11 +5,14 @@ import {
   Table, TableBody, TableCell, TableHead, TableRow, Paper,
   TextField, Button, Typography, Box, Drawer, List, ListItem,
   Divider, useMediaQuery, useTheme, Checkbox, FormGroup, FormControlLabel,
-  Tooltip, Select, MenuItem, OutlinedInput, TableContainer, Tabs, Tab
+  Tooltip, Select, MenuItem, OutlinedInput, TableContainer, Tabs, Tab,
+  Collapse, IconButton, Chip
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { Link } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
@@ -17,31 +20,27 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 const columnMap = {
   'stock': 'Symbol',
   'crypto_name': 'Name',
-  'oversold_alert': 'Oversold Alert',
-  'anchored_obv_alert_state': 'OBV Alert',
-  'datetime': 'Date & Time'
+  'alerts': 'Alerts',
+  'datetime': 'Date'
 };
 
 const filterColumns = ['stock', 'crypto_name'];
-const alertStateOptions = ['$$$'];
-const obvAlertOptions = ['$$$', '-$$$', '-'];
+const alertTypeOptions = ['oversold', 'force_index', 'obv_positive', 'obv_negative', 'momentum_continuation'];
 const drawerWidth = 300;
 
 function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
   const [alertsData, setAlertsData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
+  const [groupedData, setGroupedData] = useState({});
+  const [expandedDates, setExpandedDates] = useState({});
+  const [filteredData, setFilteredData] = useState({});
   const [filters, setFilters] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedBase, setSelectedBase] = useState('usd');
-  const [alertTypeFilters, setAlertTypeFilters] = useState({
-    oversold_alert: [],
-    anchored_obv_alert_state: []
-  });
+  const [alertTypeFilters, setAlertTypeFilters] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: 'datetime', direction: 'descending' });
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
 
   const getDetailLink = (symbol, selectedBase) => {
     switch(selectedBase.toLowerCase()) {
@@ -62,8 +61,27 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
           ? 'alerts' 
           : `alerts_${selectedBase}`;
         const result = await axios.get(`${API_URL}/crypto/${endpoint}`);
+        
+        // Group by date
+        const grouped = result.data.reduce((acc, alert) => {
+          const date = new Date(alert.datetime).toLocaleDateString();
+          if (!acc[date]) {
+            acc[date] = [];
+          }
+          acc[date].push(alert);
+          return acc;
+        }, {});
+        
         setAlertsData(result.data);
-        setFilteredData(result.data);
+        setGroupedData(grouped);
+        setFilteredData(grouped);
+        
+        // Initialize expanded state for all dates
+        const expandedState = Object.keys(grouped).reduce((acc, date) => {
+          acc[date] = false;
+          return acc;
+        }, {});
+        setExpandedDates(expandedState);
       } catch (error) {
         console.error("Error fetching alerts data:", error);
       } finally {
@@ -81,40 +99,79 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     }));
   };
 
-  const handleAlertTypeFilterChange = (column, value) => {
-    setAlertTypeFilters(prevFilters => ({
-      ...prevFilters,
-      [column]: prevFilters[column].includes(value)
-        ? prevFilters[column].filter(v => v !== value)
-        : [...prevFilters[column], value]
-    }));
+  const handleAlertTypeFilterChange = (type) => {
+    setAlertTypeFilters(prevFilters => {
+      if (prevFilters.includes(type)) {
+        return prevFilters.filter(t => t !== type);
+      } else {
+        return [...prevFilters, type];
+      }
+    });
   };
 
   const applyFilters = () => {
-    const filtered = alertsData.filter(alert => {
-      const matchesTextFilters = Object.entries(filters).every(([column, value]) => {
-        if (!value) return true;
-        const alertValue = String(alert[column]).toLowerCase();
-        return alertValue.includes(value);
-      });
+    const filtered = {};
+    
+    // Apply text filters and alert type filters
+    Object.entries(groupedData).forEach(([date, alerts]) => {
+      const filteredAlerts = alerts.filter(alert => {
+        // Apply text-based filters
+        const matchesTextFilters = Object.entries(filters).every(([column, value]) => {
+          if (!value) return true;
+          if (!alert[column]) return false;
+          return String(alert[column]).toLowerCase().includes(value);
+        });
 
-      const matchesAlertTypes = Object.entries(alertTypeFilters).every(([column, selectedTypes]) => {
-        return selectedTypes.length === 0 || selectedTypes.includes(alert[column]);
-      });
+        // Apply alert type filters
+        const matchesAlertTypes = alertTypeFilters.length === 0 || 
+          alertTypeFilters.some(type => {
+            return alert.alerts && alert.alerts.some(a => a.type === type);
+          });
 
-      return matchesTextFilters && matchesAlertTypes;
+        return matchesTextFilters && matchesAlertTypes;
+      });
+      
+      if (filteredAlerts.length > 0) {
+        filtered[date] = filteredAlerts;
+      }
     });
+    
     setFilteredData(filtered);
     if (isMobile) toggleDrawer();
   };
 
   const clearFilters = () => {
     setFilters({});
-    setAlertTypeFilters({
-      oversold_alert: [],
-      anchored_obv_alert_state: []
+    setAlertTypeFilters([]);
+    setFilteredData(groupedData);
+  };
+
+  const toggleDateExpansion = (date) => {
+    setExpandedDates(prev => ({
+      ...prev,
+      [date]: !prev[date]
+    }));
+  };
+
+  const expandAllDates = () => {
+    const newExpandedState = {};
+    Object.keys(filteredData).forEach(date => {
+      newExpandedState[date] = true;
     });
-    setFilteredData(alertsData);
+    setExpandedDates(newExpandedState);
+  };
+
+  const collapseAllDates = () => {
+    const newExpandedState = {};
+    Object.keys(filteredData).forEach(date => {
+      newExpandedState[date] = false;
+    });
+    setExpandedDates(newExpandedState);
+  };
+
+  const handleColumnVisibilityChange = (event) => {
+    const { value } = event.target;
+    setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
   };
 
   const requestSort = (key) => {
@@ -125,38 +182,61 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     setSortConfig({ key, direction });
   };
 
-  const handleColumnVisibilityChange = (event) => {
-    const { value } = event.target;
-    setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
-  };
+  const sortedDates = React.useMemo(() => {
+    return Object.keys(filteredData).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return sortConfig.direction === 'ascending' 
+        ? dateA - dateB 
+        : dateB - dateA;
+    });
+  }, [filteredData, sortConfig]);
 
   const visibleColumns = Object.keys(columnMap).filter(column => !hiddenColumns.includes(column));
 
-  const sortedData = React.useMemo(() => {
-    let sortableItems = [...filteredData];
-    if (sortConfig.key !== null) {
-      sortableItems.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
+  // Function to determine alert color
+  const getAlertColor = (alertType) => {
+    switch (alertType) {
+      case 'oversold':
+        return '#4caf50'; // Green
+      case 'force_index':
+        return '#2196f3'; // Blue
+      case 'obv_positive':
+        return '#9c27b0'; // Purple
+      case 'obv_negative':
+        return '#f44336'; // Red
+      case 'momentum_continuation':
+        return '#ff9800'; // Orange
+      default:
+        return '#757575'; // Grey
     }
-    return sortableItems;
-  }, [filteredData, sortConfig]);
+  };
+
+  // Function to get alert label
+  const getAlertLabel = (alertType) => {
+    switch (alertType) {
+      case 'oversold':
+        return 'Oversold';
+      case 'force_index':
+        return 'Force Index';
+      case 'obv_positive':
+        return 'OBV+';
+      case 'obv_negative':
+        return 'OBV-';
+      case 'momentum_continuation':
+        return 'Momentum';
+      default:
+        return alertType;
+    }
+  };
 
   const drawer = (
     <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2, mt: 8 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Filters</Typography>
-          <Button onClick={toggleDrawer}>
-            <ChevronLeftIcon />
-          </Button>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mt: 8 }}>
+        <Typography variant="h6">Filters</Typography>
+        <Button onClick={toggleDrawer}>
+          <ChevronLeftIcon />
+        </Button>
       </Box>
       <Divider />
       <List>
@@ -214,39 +294,19 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
 
         <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
           <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Oversold Alert Types
+            Alert Types
           </Typography>
           <FormGroup>
-            {alertStateOptions.map((option) => (
+            {alertTypeOptions.map((option) => (
               <FormControlLabel
                 key={option}
                 control={
                   <Checkbox
-                    checked={alertTypeFilters.oversold_alert.includes(option)}
-                    onChange={() => handleAlertTypeFilterChange('oversold_alert', option)}
+                    checked={alertTypeFilters.includes(option)}
+                    onChange={() => handleAlertTypeFilterChange(option)}
                   />
                 }
-                label={option}
-              />
-            ))}
-          </FormGroup>
-        </ListItem>
-
-        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-            OBV Alert Types
-          </Typography>
-          <FormGroup>
-            {obvAlertOptions.map((option) => (
-              <FormControlLabel
-                key={option}
-                control={
-                  <Checkbox
-                    checked={alertTypeFilters.anchored_obv_alert_state.includes(option)}
-                    onChange={() => handleAlertTypeFilterChange('anchored_obv_alert_state', option)}
-                  />
-                }
-                label={option}
+                label={getAlertLabel(option)}
               />
             ))}
           </FormGroup>
@@ -262,13 +322,6 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
       </Box>
     </Box>
   );
-
-  const formatValue = (column, value) => {
-    if (column === 'datetime') {
-      return new Date(value).toLocaleString();
-    }
-    return value;
-  };
 
   return (
     <Box sx={{ 
@@ -311,6 +364,23 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
           }),
         }}
       >
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          p: 2,
+          borderBottom: 1,
+          borderColor: 'divider'
+        }}>
+          <Typography variant="h6">
+            Crypto Alerts ({selectedBase.toUpperCase()}) {sortedDates.length > 0 ? `(${sortedDates.length} days)` : ''}
+          </Typography>
+          <Box>
+            <Button onClick={expandAllDates} sx={{ mr: 1 }}>Expand All</Button>
+            <Button onClick={collapseAllDates}>Collapse All</Button>
+          </Box>
+        </Box>
+
         <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto' }}>
           {isLoading ? (
             <Box sx={{ 
@@ -323,76 +393,173 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
               <CircularProgress />
             </Box>
           ) : (
-            <Table stickyHeader>
+            <Table>
               <TableHead>
                 <TableRow>
-                  {visibleColumns.map((key) => (
-                    <TableCell 
-                      key={key}
-                      align={key === 'stock' || key === 'crypto_name' ? "left" : "center"}
-                      sx={{ 
-                        whiteSpace: 'nowrap', 
-                        padding: '8px 12px',
-                        fontSize: '0.9rem',
-                        fontWeight: 'bold',
-                        backgroundColor: '#f8f9fa'
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: key === 'stock' || key === 'crypto_name' ? "flex-start" : "center" }}>
-                        {columnMap[key]}
-                        <Button size="small" onClick={() => requestSort(key)}>
-                          {sortConfig.key === key ? (
-                            sortConfig.direction === 'ascending' ? (
-                              <ArrowUpwardIcon fontSize="inherit" />
-                            ) : (
-                              <ArrowDownwardIcon fontSize="inherit" />
-                            )
+                  <TableCell sx={{ width: '3%' }}></TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                      backgroundColor: '#f8f9fa'
+                    }}
+                  >
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center'
+                    }}>
+                      {columnMap['datetime']}
+                      <Button size="small" onClick={() => requestSort('datetime')}>
+                        {sortConfig.key === 'datetime' ? (
+                          sortConfig.direction === 'ascending' ? (
+                            <ArrowUpwardIcon fontSize="inherit" />
                           ) : (
-                            <ArrowUpwardIcon fontSize="inherit" color="disabled" />
-                          )}
-                        </Button>
-                      </Box>
-                    </TableCell>
-                  ))}
+                            <ArrowDownwardIcon fontSize="inherit" />
+                          )
+                        ) : (
+                          <ArrowUpwardIcon fontSize="inherit" color="disabled" />
+                        )}
+                      </Button>
+                    </Box>
+                  </TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                      backgroundColor: '#f8f9fa'
+                    }}
+                  >
+                    Alerts Count
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedData.map((alert, index) => (
-                  <TableRow key={index} hover>
-                    {visibleColumns.map((column) => (
-                      <TableCell 
-                        key={column}
-                        align={column === 'stock' || column === 'crypto_name' ? "left" : "center"}
+                {sortedDates.length > 0 ? (
+                  sortedDates.map((date) => (
+                    <React.Fragment key={date}>
+                      <TableRow 
                         sx={{ 
-                          whiteSpace: 'nowrap', 
-                          padding: '8px 12px',
-                          fontSize: '0.85rem'
+                          '& > *': { borderBottom: 'unset' },
+                          cursor: 'pointer'
                         }}
+                        onClick={() => toggleDateExpansion(date)}
                       >
-                        {column === 'stock' ? (
-                          <Link 
-                            to={getDetailLink(alert[column], selectedBase)}
-                            style={{ 
-                              color: '#1976d2', 
-                              textDecoration: 'none',
-                              '&:hover': {
-                                textDecoration: 'underline'
-                              }
-                            }}
+                        <TableCell>
+                          <IconButton
+                            aria-label="expand row"
+                            size="small"
                           >
-                            {formatValue(column, alert[column])}
-                          </Link>
-                        ) : column === 'crypto_name' ? (
-                          <Tooltip title={alert[column]} placement="top">
-                            <span>{formatValue(column, alert[column])}</span>
-                          </Tooltip>
-                        ) : (
-                          formatValue(column, alert[column])
-                        )}
-                      </TableCell>
-                    ))}
+                            {expandedDates[date] ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                          </IconButton>
+                        </TableCell>
+                        <TableCell component="th" scope="row">
+                          <Typography variant="body1" fontWeight="bold">
+                            {date}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={filteredData[date].length} 
+                            color="primary" 
+                            size="small" 
+                          />
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={3}>
+                          <Collapse in={expandedDates[date]} timeout="auto" unmountOnExit>
+                            <Box sx={{ margin: 1 }}>
+                              <Table size="small" aria-label="alerts">
+                                <TableHead>
+                                  <TableRow>
+                                    {visibleColumns.filter(col => col !== 'datetime').map((key) => (
+                                      <TableCell 
+                                        key={key}
+                                        align={key === 'stock' || key === 'crypto_name' ? "left" : "center"}
+                                        sx={{ 
+                                          whiteSpace: 'nowrap', 
+                                          padding: '8px 12px',
+                                          fontSize: '0.9rem',
+                                          fontWeight: 'bold',
+                                          backgroundColor: '#f8f9fa'
+                                        }}
+                                      >
+                                        {columnMap[key]}
+                                      </TableCell>
+                                    ))}
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {filteredData[date].map((alert, index) => (
+                                    <TableRow key={`${alert.stock}-${index}`} hover>
+                                      {visibleColumns.filter(col => col !== 'datetime').map((column) => (
+                                        <TableCell 
+                                          key={column}
+                                          align={column === 'stock' || column === 'crypto_name' ? "left" : "center"}
+                                          sx={{ 
+                                            whiteSpace: 'nowrap', 
+                                            padding: '8px 12px',
+                                            fontSize: '0.85rem'
+                                          }}
+                                        >
+                                          {column === 'stock' ? (
+                                            <Link 
+                                              to={getDetailLink(alert[column], selectedBase)}
+                                              style={{ 
+                                                color: '#1976d2', 
+                                                textDecoration: 'none'
+                                              }}
+                                            >
+                                              {alert[column]}
+                                            </Link>
+                                          ) : column === 'crypto_name' ? (
+                                            <Tooltip title={alert[column]} placement="top">
+                                              <span>{alert[column]}</span>
+                                            </Tooltip>
+                                          ) : column === 'alerts' ? (
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                              {alert.alerts && alert.alerts.map((a, i) => (
+                                                <Tooltip 
+                                                  key={i} 
+                                                  title={a.description || getAlertLabel(a.type)}
+                                                  placement="top"
+                                                >
+                                                  <Chip
+                                                    label={getAlertLabel(a.type)}
+                                                    size="small"
+                                                    sx={{
+                                                      backgroundColor: getAlertColor(a.type),
+                                                      color: 'white',
+                                                      fontWeight: 'bold'
+                                                    }}
+                                                  />
+                                                </Tooltip>
+                                              ))}
+                                            </Box>
+                                          ) : (
+                                            alert[column]
+                                          )}
+                                        </TableCell>
+                                      ))}
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      <Typography variant="body1" sx={{ p: 2 }}>
+                        No alerts found matching the filters
+                      </Typography>
+                    </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           )}
