@@ -102,7 +102,7 @@ def process_alerts(date):
 
 def main():
     current_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    dates_to_process = [current_date - timedelta(days=i) for i in range(60)]
+    dates_to_process = [current_date - timedelta(days=i) for i in range(9)]
     dates_to_process.reverse()
 
     for date in dates_to_process:
