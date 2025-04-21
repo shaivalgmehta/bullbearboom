@@ -200,7 +200,7 @@ def get_alerts_data():
                         stock_name,
                         alerts
                     FROM us_alerts_table
-                    WHERE datetime >= NOW() - INTERVAL '30 days'
+                    WHERE datetime >= NOW() - INTERVAL '90 days'
                     ORDER BY datetime DESC
                 """
                 
@@ -476,7 +476,7 @@ def get_in_alerts_data():
                         stock_name,
                         alerts
                     FROM in_alerts_table
-                    WHERE datetime >= NOW() - INTERVAL '30 days'
+                    WHERE datetime >= NOW() - INTERVAL '90 days'
                     ORDER BY datetime DESC
                 """
                 
@@ -733,7 +733,7 @@ def get_crypto_alerts():
                 crypto_name,
                 alerts
             FROM crypto_alerts_table
-            WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
+            WHERE datetime >= CURRENT_DATE - INTERVAL '90 days'
             ORDER BY datetime DESC
         """)
         
@@ -773,7 +773,7 @@ def get_crypto_alerts_eth():
                 crypto_name,
                 alerts
             FROM crypto_alerts_table_eth
-            WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
+            WHERE datetime >= CURRENT_DATE - INTERVAL '90 days'
             ORDER BY datetime DESC
         """)
         
@@ -813,7 +813,7 @@ def get_crypto_alerts_btc():
                 crypto_name,
                 alerts
             FROM crypto_alerts_table_btc
-            WHERE datetime >= CURRENT_DATE - INTERVAL '10 days'
+            WHERE datetime >= CURRENT_DATE - INTERVAL '90 days'
             ORDER BY datetime DESC
         """)
         

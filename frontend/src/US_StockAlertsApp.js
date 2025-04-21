@@ -25,7 +25,7 @@ const columnMap = {
 };
 
 const filterColumns = ['stock', 'stock_name'];
-const alertTypeOptions = ['oversold', 'force_index', 'obv_positive', 'obv_negative', 'momentum_continuation'];
+const alertTypeOptions = ['oversold', 'obv_positive', 'obv_negative'];
 const drawerWidth = 300;
 
 function US_StockAlertsApp({ drawerOpen, toggleDrawer }) {
@@ -184,14 +184,10 @@ function US_StockAlertsApp({ drawerOpen, toggleDrawer }) {
     switch (alertType) {
       case 'oversold':
         return '#4caf50'; // Green
-      case 'force_index':
-        return '#2196f3'; // Blue
-      case 'obv_positive':
+       case 'obv_positive':
         return '#9c27b0'; // Purple
       case 'obv_negative':
         return '#f44336'; // Red
-      case 'momentum_continuation':
-        return '#ff9800'; // Orange
       default:
         return '#757575'; // Grey
     }
@@ -202,15 +198,11 @@ function US_StockAlertsApp({ drawerOpen, toggleDrawer }) {
     switch (alertType) {
       case 'oversold':
         return 'Oversold';
-      case 'force_index':
-        return 'Force Index';
-      case 'obv_positive':
+         case 'obv_positive':
         return 'OBV+';
       case 'obv_negative':
         return 'OBV-';
-      case 'momentum_continuation':
-        return 'Momentum';
-      default:
+       default:
         return alertType;
     }
   };

@@ -57,35 +57,23 @@ def process_alerts(date):
                 # Only process stocks that have at least one active alert
                 active_alerts = []
                 
-                if williams_alert == '$$$':
+                
+                if williams_alert == '$$$' and force_index_alert == '$$$':
                     active_alerts.append({
                         "type": "oversold",
-                        "value": williams_alert,
-                        "description": "Williams %R Oversold Alert"
+                        "value": '$$$',
+                        "description": "Force Index Alert & Williams R Alert triggered"
                     })
                 
-                if williams_alert == '$' and force_index_alert in ['$', '$$$']:
-                    active_alerts.append({
-                        "type": "momentum_continuation",
-                        "value": williams_alert,
-                        "description": "Williams %R Momentum Continuation"
-                    })
-                
-                if force_index_alert == '$$$':
-                    active_alerts.append({
-                        "type": "force_index",
-                        "value": force_index_alert,
-                        "description": "Force Index Crossover Alert"
-                    })
-                
-                if obv_alert == '$$$':
+            
+                if obv_alert == '$$$' and williams_alert == '$$$' and force_index_alert == '$$$':
                     active_alerts.append({
                         "type": "obv_positive",
                         "value": obv_alert,
                         "description": "OBV Positive Crossover"
                     })
                 
-                if obv_alert == '-$$$':
+                if obv_alert == '-$$$' and williams_alert == '$$$' and force_index_alert == '$$$':
                     active_alerts.append({
                         "type": "obv_negative",
                         "value": obv_alert,
@@ -114,7 +102,7 @@ def process_alerts(date):
 
 def main():
     current_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    dates_to_process = [current_date - timedelta(days=i) for i in range(7)]
+    dates_to_process = [current_date - timedelta(days=i) for i in range(60)]
     dates_to_process.reverse()
 
     for date in dates_to_process:
