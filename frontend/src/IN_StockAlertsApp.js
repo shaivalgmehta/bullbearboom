@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useContext, useState, useEffect } from 'react';
 import { CircularProgress } from '@mui/material';
 import axios from 'axios';
 import { 
@@ -13,7 +13,11 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import Switch from '@mui/material/Switch';
 import { Link } from 'react-router-dom';
+import WatchListStar from './Watchlist/WatchListStar';
+import { AuthContext } from './Authentication/AuthContext';
+
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -40,13 +44,21 @@ function IN_StockAlertsApp({ drawerOpen, toggleDrawer }) {
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [watchListOnly, setWatchListOnly] = useState(false);
+  const { user } = useContext(AuthContext);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const result = await axios.get(`${API_URL}/in_stocks/alerts`);
-        
+        // Add watch_list_only parameter to API call
+        const params = new URLSearchParams();
+        if (watchListOnly) {
+          params.append('watch_list_only', 'true');
+        }
+
+        const result = await axios.get(`${API_URL}/in_stocks/alerts${params.toString() ? `?${params.toString()}` : ''}`);
+
         // Group by date
         const grouped = result.data.reduce((acc, alert) => {
           const date = new Date(alert.datetime).toLocaleDateString();
@@ -75,7 +87,7 @@ function IN_StockAlertsApp({ drawerOpen, toggleDrawer }) {
     };
 
     fetchData();
-  }, []);
+  }, [watchListOnly]);
 
   const handleFilterChange = (column, value) => {
     setFilters(prevFilters => ({
@@ -272,6 +284,26 @@ function IN_StockAlertsApp({ drawerOpen, toggleDrawer }) {
             ))}
           </FormGroup>
         </ListItem>
+        <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+            Watch List
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={watchListOnly}
+                onChange={(e) => setWatchListOnly(e.target.checked)}
+                disabled={!user}
+              />
+            }
+            label="Show Watch List Only"
+          />
+          {!user && (
+            <Typography variant="caption" color="text.secondary">
+              Log in to use watch list features
+            </Typography>
+          )}
+        </ListItem>
       </List>
       <Box sx={{ mt: 2 }}>
         <Button variant="contained" fullWidth onClick={applyFilters} sx={{ mb: 1 }}>
@@ -433,6 +465,7 @@ function IN_StockAlertsApp({ drawerOpen, toggleDrawer }) {
                               <Table size="small" aria-label="alerts">
                                 <TableHead>
                                   <TableRow>
+                                    <TableCell />                                  
                                     {visibleColumns.filter(col => col !== 'datetime').map((key) => (
                                       <TableCell 
                                         key={key}
@@ -453,6 +486,12 @@ function IN_StockAlertsApp({ drawerOpen, toggleDrawer }) {
                                 <TableBody>
                                   {filteredData[date].map((alert, index) => (
                                     <TableRow key={`${alert.stock}-${index}`} hover>
+                                      <TableCell padding="checkbox">
+                                        <WatchListStar 
+                                          entityType="in_stock" // Change to appropriate type for each component
+                                          symbol={alert.stock} 
+                                        />
+                                      </TableCell>
                                       {visibleColumns.filter(col => col !== 'datetime').map((column) => (
                                         <TableCell 
                                           key={column}

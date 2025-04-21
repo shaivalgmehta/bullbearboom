@@ -6,13 +6,15 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from us_stocks.us_stock_screener_table_process import update_us_screener_table
 from in_stocks.in_stock_screener_table_process import update_in_screener_table
 from crypto.crypto_screener_table_process import update_screener_table_usd
 from crypto.crypto_screener_table_process_btc import update_screener_table_btc
 from crypto.crypto_screener_table_process_eth import update_screener_table_eth
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, verify_jwt_in_request, JWTManager
+import bcrypt
 import numpy as np
 from typing import Dict, List
 
@@ -31,6 +33,9 @@ DB_PORT = os.getenv('DB_PORT')
 DB_NAME = os.getenv('DB_NAME')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
+
+app.config["JWT_SECRET_KEY"] = os.getenv('JWT_SECRET_KEY', '3d6f45a5fc12445dbac2f59c3b6c7cb1d2c2d9c7b8eb4157e2c611f6b3f8ac83')
+jwt = JWTManager(app)
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -189,22 +194,53 @@ def get_latest_stock_data():
 
 @app.route('/api/stocks/alerts')
 def get_alerts_data():
-    logging.info("Fetching alerts for all stocks")
+    logging.info("Fetching alerts for US stocks")
     try:
+        # Add parameter for watch list filtering
+        watch_list_only = request.args.get('watch_list_only', 'false').lower() == 'true'
+        
+        # Get user_id from JWT if authenticated
+        user_id = None
+        if watch_list_only:
+            try:
+                # Verify JWT but don't require it for the whole endpoint
+                verify_jwt_in_request()
+                user_id = get_jwt_identity()
+            except Exception as e:
+                return jsonify({"error": "Authentication required for watch list filtering"}), 401
+        
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Base query
                 query = """
                     SELECT 
-                        datetime,
-                        stock,
-                        stock_name,
-                        alerts
-                    FROM us_alerts_table
-                    WHERE datetime >= NOW() - INTERVAL '90 days'
-                    ORDER BY datetime DESC
+                        a.datetime,
+                        a.stock,
+                        a.stock_name,
+                        a.alerts
+                    FROM us_alerts_table a
                 """
                 
-                cur.execute(query)
+                # Add join with watch_lists if filtering by watch list
+                params = []
+                where_clauses = ["a.datetime >= NOW() - INTERVAL '30 days'"]
+                
+                if watch_list_only:
+                    query += """
+                        INNER JOIN watch_lists w ON 
+                            a.stock = w.symbol AND 
+                            w.entity_type = 'us_stock' AND
+                            w.user_id = %s
+                    """
+                    params.append(user_id)
+                
+                # Complete the query
+                query += f"""
+                    WHERE {' AND '.join(where_clauses)}
+                    ORDER BY a.datetime DESC
+                """
+                
+                cur.execute(query, params)
                 data = cur.fetchall()
                 
                 # Process the data to ensure alerts is properly parsed from JSON
@@ -219,12 +255,12 @@ def get_alerts_data():
                     
                     processed_data.append(row)
                 
-                logging.info(f"Fetched {len(processed_data)} alerts from the last 30 days")
+                logging.info(f"Fetched {len(processed_data)} US alerts")
                 return jsonify(processed_data)
-                
+
     except Exception as e:
-        logging.error(f"Error fetching alerts data: {e}")
-        return jsonify({"error": "Failed to fetch alerts data"}), 500
+        logging.error(f"Error fetching US alerts data:: {str(e)}")
+        return jsonify({"error": str(e)}), 500  # <-- send actual error back
 
 @app.route('/api/stocks/<symbol>/historical')
 def get_stock_historical_data(symbol):
@@ -465,22 +501,53 @@ def get_latest_in_stock_data():
 
 @app.route('/api/in_stocks/alerts')
 def get_in_alerts_data():
-    logging.info("Fetching alerts for all Indian stocks")
+    logging.info("Fetching alerts for Indian stocks")
     try:
+        # Add parameter for watch list filtering
+        watch_list_only = request.args.get('watch_list_only', 'false').lower() == 'true'
+        
+        # Get user_id from JWT if authenticated
+        user_id = None
+        if watch_list_only:
+            try:
+                # Verify JWT but don't require it for the whole endpoint
+                verify_jwt_in_request()
+                user_id = get_jwt_identity()
+            except Exception as e:
+                return jsonify({"error": "Authentication required for watch list filtering"}), 401
+        
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Base query
                 query = """
                     SELECT 
-                        datetime,
-                        stock,
-                        stock_name,
-                        alerts
-                    FROM in_alerts_table
-                    WHERE datetime >= NOW() - INTERVAL '90 days'
-                    ORDER BY datetime DESC
+                        a.datetime,
+                        a.stock,
+                        a.stock_name,
+                        a.alerts
+                    FROM in_alerts_table a
                 """
                 
-                cur.execute(query)
+                # Add join with watch_lists if filtering by watch list
+                params = []
+                where_clauses = ["a.datetime >= NOW() - INTERVAL '30 days'"]
+                
+                if watch_list_only:
+                    query += """
+                        INNER JOIN watch_lists w ON 
+                            a.stock = w.symbol AND 
+                            w.entity_type = 'in_stock' AND
+                            w.user_id = %s
+                    """
+                    params.append(user_id)
+                
+                # Complete the query
+                query += f"""
+                    WHERE {' AND '.join(where_clauses)}
+                    ORDER BY a.datetime DESC
+                """
+                
+                cur.execute(query, params)
                 data = cur.fetchall()
                 
                 # Process the data to ensure alerts is properly parsed from JSON
@@ -495,12 +562,12 @@ def get_in_alerts_data():
                     
                     processed_data.append(row)
                 
-                logging.info(f"Fetched {len(processed_data)} alerts for Indian stocks from the last 30 days")
+                logging.info(f"Fetched {len(processed_data)} India alerts")
                 return jsonify(processed_data)
                 
     except Exception as e:
         logging.error(f"Error fetching India alerts data: {e}")
-        return jsonify({"error": "Failed to fetch India alerts data"}), 500
+        return jsonify({"error": "Failed to fetch alerts data"}), 500
 
 @app.route('/api/in_stocks/<symbol>/historical')
 def get_in_stock_historical_data(symbol):
@@ -719,23 +786,55 @@ def get_latest_crypto_btc_data():
         logging.error(f"Error fetching crypto data: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/crypto/alerts', methods=['GET'])
+@app.route('/api/crypto/alerts')
 def get_crypto_alerts():
     try:
+        # Add parameter for watch list filtering
+        watch_list_only = request.args.get('watch_list_only', 'false').lower() == 'true'
+        
+        # Get user_id from JWT if authenticated
+        user_id = None
+        if watch_list_only:
+            try:
+                # Verify JWT but don't require it for the whole endpoint
+                verify_jwt_in_request()
+                user_id = get_jwt_identity()
+            except Exception as e:
+                return jsonify({"error": "Authentication required for watch list filtering"}), 401
+            
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get the last 10 days of alerts
-        cur.execute("""
+        # Base query
+        query = """
             SELECT 
-                datetime,
-                stock,
-                crypto_name,
-                alerts
-            FROM crypto_alerts_table
-            WHERE datetime >= CURRENT_DATE - INTERVAL '90 days'
-            ORDER BY datetime DESC
-        """)
+                a.datetime,
+                a.stock,
+                a.crypto_name,
+                a.alerts
+            FROM crypto_alerts_table a
+        """
+        
+        # Add join with watch_lists if filtering by watch list
+        params = []
+        where_clauses = ["a.datetime >= CURRENT_DATE - INTERVAL '10 days'"]
+        
+        if watch_list_only:
+            query += """
+                INNER JOIN watch_lists w ON 
+                    a.stock = w.symbol AND 
+                    w.entity_type = 'crypto' AND
+                    w.user_id = %s
+            """
+            params.append(user_id)
+        
+        # Complete the query
+        query += f"""
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY a.datetime DESC
+        """
+        
+        cur.execute(query, params)
         
         alerts = cur.fetchall()
         
@@ -759,23 +858,52 @@ def get_crypto_alerts():
         logging.error(f"Error fetching crypto alerts: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/crypto/alerts_eth', methods=['GET'])
+@app.route('/api/crypto/alerts_eth')
 def get_crypto_alerts_eth():
     try:
+        # Add parameter for watch list filtering
+        watch_list_only = request.args.get('watch_list_only', 'false').lower() == 'true'
+        
+        # Get user_id from JWT if authenticated
+        user_id = get_jwt_identity() if watch_list_only else None
+        
+        # If watch list filtering is requested but user is not logged in
+        if watch_list_only and user_id is None:
+            return jsonify({"error": "Authentication required for watch list filtering"}), 401
+            
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get the last 10 days of ETH-based alerts
-        cur.execute("""
+        # Base query
+        query = """
             SELECT 
-                datetime,
-                stock,
-                crypto_name,
-                alerts
-            FROM crypto_alerts_table_eth
-            WHERE datetime >= CURRENT_DATE - INTERVAL '90 days'
-            ORDER BY datetime DESC
-        """)
+                a.datetime,
+                a.stock,
+                a.crypto_name,
+                a.alerts
+            FROM crypto_alerts_table_eth a
+        """
+        
+        # Add join with watch_lists if filtering by watch list
+        params = []
+        where_clauses = ["a.datetime >= CURRENT_DATE - INTERVAL '10 days'"]
+        
+        if watch_list_only:
+            query += """
+                INNER JOIN watch_lists w ON 
+                    a.stock = w.symbol AND 
+                    w.entity_type = 'crypto' AND
+                    w.user_id = %s
+            """
+            params.append(user_id)
+        
+        # Complete the query
+        query += f"""
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY a.datetime DESC
+        """
+        
+        cur.execute(query, params)
         
         alerts = cur.fetchall()
         
@@ -799,23 +927,52 @@ def get_crypto_alerts_eth():
         logging.error(f"Error fetching ETH-based crypto alerts: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/crypto/alerts_btc', methods=['GET'])
+@app.route('/api/crypto/alerts_btc')
 def get_crypto_alerts_btc():
     try:
+        # Add parameter for watch list filtering
+        watch_list_only = request.args.get('watch_list_only', 'false').lower() == 'true'
+        
+        # Get user_id from JWT if authenticated
+        user_id = get_jwt_identity() if watch_list_only else None
+        
+        # If watch list filtering is requested but user is not logged in
+        if watch_list_only and user_id is None:
+            return jsonify({"error": "Authentication required for watch list filtering"}), 401
+            
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get the last 10 days of BTC-based alerts
-        cur.execute("""
+        # Base query
+        query = """
             SELECT 
-                datetime,
-                stock,
-                crypto_name,
-                alerts
-            FROM crypto_alerts_table_btc
-            WHERE datetime >= CURRENT_DATE - INTERVAL '90 days'
-            ORDER BY datetime DESC
-        """)
+                a.datetime,
+                a.stock,
+                a.crypto_name,
+                a.alerts
+            FROM crypto_alerts_table_btc a
+        """
+        
+        # Add join with watch_lists if filtering by watch list
+        params = []
+        where_clauses = ["a.datetime >= CURRENT_DATE - INTERVAL '10 days'"]
+        
+        if watch_list_only:
+            query += """
+                INNER JOIN watch_lists w ON 
+                    a.stock = w.symbol AND 
+                    w.entity_type = 'crypto' AND
+                    w.user_id = %s
+            """
+            params.append(user_id)
+        
+        # Complete the query
+        query += f"""
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY a.datetime DESC
+        """
+        
+        cur.execute(query, params)
         
         alerts = cur.fetchall()
         
@@ -1479,6 +1636,237 @@ def get_fibonacci_data():
     except Exception as e:
         logging.error(f"Error fetching Fibonacci data: {e}")
         return jsonify({"error": str(e)}), 500
+
+################## AUTHENTICATION API ##########################################
+
+# User registration
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        # Input validation
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+            
+        if len(password) < 8:
+            return jsonify({"error": "Password must be at least 8 characters"}), 400
+            
+        # Check if user already exists
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+        existing_user = cur.fetchone()
+        
+        if existing_user:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Email already registered"}), 409
+        
+        # Hash the password
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Insert new user
+        cur.execute(
+            "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id",
+            (email, hashed_password)
+        )
+        
+        user_id = cur.fetchone()[0]
+        conn.commit()
+        
+        # Generate JWT token
+        access_token = create_access_token(identity=str(user_id), expires_delta=timedelta(days=7))
+
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "message": "Registration successful",
+            "token": access_token,
+            "user": {"id": user_id, "email": email}
+        })
+        
+    except Exception as e:
+        logging.error(f"Registration error: {str(e)}")
+        return jsonify({"error": str(e)}), 500  # <-- send actual error back
+
+# User login
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        # Input validation
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+        
+        # Fetch user from database
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT id, password_hash FROM users WHERE email = %s", (email,))
+        user_data = cur.fetchone()
+        
+        if not user_data:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Invalid email or password"}), 401
+        
+        user_id, hashed_password = user_data
+        
+        # Verify password
+        if not bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8')):
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Invalid email or password"}), 401
+        
+        # Generate JWT token
+        access_token = create_access_token(identity=str(user_id), expires_delta=timedelta(days=7))
+
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "message": "Login successful",
+            "token": access_token,
+            "user": {"id": user_id, "email": email}
+        })
+        
+    except Exception as e:
+        logging.error(f"Login error: {str(e)}")
+        return jsonify({"error": "Login failed"}), 500
+
+# Get current user info
+@app.route('/api/auth/me', methods=['GET'])
+@jwt_required()
+def get_user():
+    try:
+        user_id = get_jwt_identity()
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT id, email, created_at FROM users WHERE id = %s", (user_id,))
+        user_data = cur.fetchone()
+        
+        if not user_data:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+        
+        user_id, email, created_at = user_data
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "id": user_id,
+            "email": email,
+            "created_at": created_at.isoformat() if created_at else None
+        })
+        
+    except Exception as e:
+        logging.error(f"Get user error: {str(e)}")
+        return jsonify({"error": "Failed to retrieve user data"}), 500
+
+############## WATCH LIST API ###################################################
+
+# Get user's watch list
+@app.route('/api/watchlist', methods=['GET'])
+@jwt_required()
+def get_watchlist():
+    user_id = get_jwt_identity()
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    cur.execute("""
+        SELECT entity_type, symbol, added_at
+        FROM watch_lists
+        WHERE user_id = %s
+        ORDER BY added_at DESC
+    """, (user_id,))
+    
+    watch_list = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    return jsonify(watch_list)
+
+# Add item to watch list
+@app.route('/api/watchlist', methods=['POST'])
+@jwt_required()
+def add_to_watchlist():
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    
+    entity_type = data.get('entity_type')
+    symbol = data.get('symbol')
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("""
+            INSERT INTO watch_lists (user_id, entity_type, symbol)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, entity_type, symbol) DO NOTHING
+            RETURNING id
+        """, (user_id, entity_type, symbol))
+        
+        result = cur.fetchone()
+        conn.commit()
+        
+        success = result is not None
+        
+        return jsonify({"success": success})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Remove item from watch list
+@app.route('/api/watchlist', methods=['DELETE'])
+@jwt_required()
+def remove_from_watchlist():
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    
+    entity_type = data.get('entity_type')
+    symbol = data.get('symbol')
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("""
+            DELETE FROM watch_lists
+            WHERE user_id = %s AND entity_type = %s AND symbol = %s
+            RETURNING id
+        """, (user_id, entity_type, symbol))
+        
+        result = cur.fetchone()
+        conn.commit()
+        
+        success = result is not None
+        
+        return jsonify({"success": success})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

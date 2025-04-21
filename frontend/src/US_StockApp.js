@@ -15,6 +15,8 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import ClearIcon from '@mui/icons-material/Clear';
 import { Link } from 'react-router-dom';
+import WatchListStar from './Watchlist/WatchListStar';
+import { AuthContext } from './Authentication/AuthContext';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 const drawerWidth = 300;
@@ -627,6 +629,7 @@ const drawer = (
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell />
                 {visibleColumns.map((key) => (
                   <TableCell 
                     key={key}
@@ -667,6 +670,7 @@ const drawer = (
                 ))}
               </TableRow>
               <TableRow>
+                <TableCell />
                 {visibleColumns.map((key) => (
                   <TableCell 
                     key={`filter-${key}`}
@@ -725,6 +729,12 @@ const drawer = (
                     },
                   }}
                 >
+                  <TableCell padding="checkbox">
+                    <WatchListStar 
+                      entityType="us_stock"
+                      symbol={stock.stock} 
+                    />
+                  </TableCell>                
                   {visibleColumns.map((column) => (
                     <TableCell 
                       key={column}

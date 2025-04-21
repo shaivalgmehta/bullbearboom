@@ -38,6 +38,8 @@ import CryptoBTCApp from './CryptoBTCApp';
 import CryptoAlertsApp from './CryptoAlertsApp';
 import CryptoDetailApp from './CryptoDetailApp/CryptoDetailApp';
 import CryptoFibonacciApp from './CryptoFibonacciApp';
+import UserMenu from './Authentication/UserMenu';
+
 
 function MainApp() {
   // Menu anchor states
@@ -245,6 +247,7 @@ function MainApp() {
                 <ListItemText>Fibonacci Analysis</ListItemText>
               </MenuItem>
             </Menu>
+            <UserMenu />
           </Toolbar>
         </AppBar>
 

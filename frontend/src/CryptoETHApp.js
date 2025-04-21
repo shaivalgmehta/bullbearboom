@@ -15,6 +15,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { Link } from 'react-router-dom';
+import WatchListStar from './Watchlist/WatchListStar';
+import { AuthContext } from './Authentication/AuthContext';
 
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
@@ -379,6 +381,7 @@ function CryptoETHApp({ drawerOpen, toggleDrawer }) {
           <Table stickyHeader>
             <TableHead>
               <TableRow>
+                <TableCell />
                 {visibleColumns.map((key) => (
                   <TableCell 
                     key={key} 
@@ -415,6 +418,12 @@ function CryptoETHApp({ drawerOpen, toggleDrawer }) {
             <TableBody>
               {sortedData.map((crypto, index) => (
                 <TableRow key={index} hover>
+                  <TableCell padding="checkbox">
+                    <WatchListStar 
+                      entityType="crypto"
+                      symbol={crypto.stock} 
+                    />
+                  </TableCell>                
                   {visibleColumns.map((column, colIndex) => (
                     <TableCell 
                       key={colIndex} 
