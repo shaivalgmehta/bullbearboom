@@ -1402,27 +1402,45 @@ def get_insider_trading_data():
         cur.execute(count_query, params)
         total_count = cur.fetchone()['count']
         
-        # Get paginated and filtered data
+        # Get paginated and filtered data with aggregated stats
+        # Using a Common Table Expression (CTE) to calculate insider averages once
         query = f"""
+            WITH insider_averages AS (
+                SELECT 
+                    insider_name,
+                    AVG(one_month_return) FILTER (WHERE transaction_type = 'P' AND one_month_return IS NOT NULL) AS avg_one_month_return,
+                    AVG(three_month_return) FILTER (WHERE transaction_type = 'P' AND three_month_return IS NOT NULL) AS avg_three_month_return,
+                    COUNT(*) FILTER (WHERE transaction_type = 'P') AS total_purchases,
+                    COUNT(*) FILTER (WHERE transaction_type = 'P' AND one_month_return > 0) AS one_month_wins,
+                    COUNT(*) FILTER (WHERE transaction_type = 'P' AND three_month_return > 0) AS three_month_wins
+                FROM us_insider_trading_table
+                GROUP BY insider_name
+            )
             SELECT 
-                datetime,
-                stock,
-                stock_name,
-                insider_name,
-                transaction_type,
-                relationship_is_director,
-                relationship_is_officer,
-                relationship_is_ten_percent_owner,
-                relationship_is_other,
-                shares_traded,
-                price_per_share,
-                total_value,
-                shares_owned_following,
-                one_month_price,
-                three_month_price,
-                one_month_return,
-                three_month_return
-            FROM us_insider_trading_table
+                t.datetime,
+                t.stock,
+                t.stock_name,
+                t.insider_name,
+                t.transaction_type,
+                t.relationship_is_director,
+                t.relationship_is_officer,
+                t.relationship_is_ten_percent_owner,
+                t.relationship_is_other,
+                t.shares_traded,
+                t.price_per_share,
+                t.total_value,
+                t.shares_owned_following,
+                t.one_month_price,
+                t.three_month_price,
+                t.one_month_return,
+                t.three_month_return,
+                a.avg_one_month_return,
+                a.avg_three_month_return,
+                a.total_purchases,
+                a.one_month_wins,
+                a.three_month_wins
+            FROM us_insider_trading_table t
+            LEFT JOIN insider_averages a ON t.insider_name = a.insider_name
             WHERE {where_clause}
             ORDER BY {sort_column} {sort_direction}
             LIMIT %s OFFSET %s
@@ -1439,7 +1457,7 @@ def get_insider_trading_data():
             'totalPages': -(-total_count // page_size)  # Ceiling division
         }
         
-        logging.info(f"Fetched page {page} of insider trading records")
+        logging.info(f"Fetched page {page} of insider trading records with aggregated stats")
         cur.close()
         conn.close()
         

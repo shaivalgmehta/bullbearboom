@@ -30,8 +30,8 @@ const columnMap = {
   'shares_owned_following': 'Shares Owned After',
   'one_month_price': '1M Price',
   'three_month_price': '3M Price',
-  'one_month_return': '1M Return',
-  'three_month_return': '3M Return',
+  'avg_one_month_return': 'Avg 1M Return',  // Updated column names to match new API response
+  'avg_three_month_return': 'Avg 3M Return', // Updated column names to match new API response
   'datetime': 'Transaction Date'
 };
 
@@ -42,8 +42,8 @@ const numericalColumns = [
   'shares_owned_following',
   'one_month_price',
   'three_month_price',
-  'one_month_return',
-  'three_month_return'
+  'avg_one_month_return',      // Updated column names
+  'avg_three_month_return'     // Updated column names
 ];
 
 const filterColumns = [
@@ -51,8 +51,8 @@ const filterColumns = [
   'insider_name',
   'shares_traded',
   'total_value',
-  'one_month_return',
-  'three_month_return'
+  'one_month_return',          // Keep original for filtering
+  'three_month_return'         // Keep original for filtering
 ];
 
 const transactionTypes = [
@@ -114,6 +114,8 @@ const formatColumnValue = (column, value, rowData) => {
       return formatNumber(value);
     case 'one_month_return':
     case 'three_month_return':
+    case 'avg_one_month_return':   // Add formatting for new columns
+    case 'avg_three_month_return': // Add formatting for new columns
       return formatPercentage(value);
     case 'relationship':
       return getRelationshipString(rowData);
@@ -148,7 +150,15 @@ function US_InsiderTradingApp({ drawerOpen, toggleDrawer }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Fetch insider statistics
+
+  // Handle insider name click - always fetch full transaction history
+const handleInsiderClick = (insiderName) => {
+  setSelectedInsider(insiderName);
+  // Always fetch complete stats with transaction history
+  fetchInsiderStats(insiderName);
+};
+
+  // Fallback fetch function for modal view - should rarely be needed
   const fetchInsiderStats = async (insiderName) => {
     setIsStatsLoading(true);
     setStatsError(null);
@@ -161,12 +171,6 @@ function US_InsiderTradingApp({ drawerOpen, toggleDrawer }) {
     } finally {
       setIsStatsLoading(false);
     }
-  };
-
-  // Handle insider name click
-  const handleInsiderClick = (insiderName) => {
-    setSelectedInsider(insiderName);
-    fetchInsiderStats(insiderName);
   };
 
   // Handle modal close
@@ -283,6 +287,7 @@ function US_InsiderTradingApp({ drawerOpen, toggleDrawer }) {
     setHiddenColumns(typeof value === 'string' ? value.split(',') : value);
   };
 
+  // Update visible columns - replace one_month_return and three_month_return with avg versions
   const visibleColumns = Object.keys(columnMap).filter(column => !hiddenColumns.includes(column));
 
   const drawer = (
@@ -356,7 +361,8 @@ function US_InsiderTradingApp({ drawerOpen, toggleDrawer }) {
         {filterColumns.map((column) => (
           <ListItem key={column} sx={{ flexDirection: 'column', alignItems: 'stretch', mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-              {columnMap[column]}
+              {columnMap[column === 'one_month_return' ? 'avg_one_month_return' : 
+                column === 'three_month_return' ? 'avg_three_month_return' : column]}
             </Typography>
             {column === 'insider_name' || column === 'stock' ? (
               <TextField
@@ -564,27 +570,29 @@ function US_InsiderTradingApp({ drawerOpen, toggleDrawer }) {
                             {formatColumnValue(column, trade[column], trade)}
                           </Link>
                         ) : column === 'insider_name' ? (
-                          <Button
-                            onClick={() => handleInsiderClick(trade[column])}
-                            sx={{
-                              padding: 0,
-                              textTransform: 'none',
-                              fontWeight: 'normal',
-                              fontSize: '0.85rem',
-                              color: 'primary.main',
-                              '&:hover': {
-                                backgroundColor: 'transparent',
-                                textDecoration: 'underline'
-                              }
-                            }}
-                          >
-                            {formatColumnValue(column, trade[column], trade)}
-                          </Button>
+                          <Tooltip title="Click to view insider statistics" placement="top">
+                            <Button
+                              onClick={() => handleInsiderClick(trade[column])}
+                              sx={{
+                                padding: 0,
+                                textTransform: 'none',
+                                fontWeight: 'normal',
+                                fontSize: '0.85rem',
+                                color: 'primary.main',
+                                '&:hover': {
+                                  backgroundColor: 'transparent',
+                                  textDecoration: 'underline'
+                                }
+                              }}
+                            >
+                              {formatColumnValue(column, trade[column], trade)}
+                            </Button>
+                          </Tooltip>
                         ) : column === 'stock_name' ? (
                           <Tooltip title={trade[column]} placement="top">
                             <span>{formatColumnValue(column, trade[column], trade)}</span>
                           </Tooltip>
-                        ) : column === 'one_month_return' || column === 'three_month_return' ? (
+                        ) : column === 'avg_one_month_return' || column === 'avg_three_month_return' ? (
                           <span style={{ 
                             color: trade[column] > 0 ? '#4caf50' : trade[column] < 0 ? '#f44336' : 'inherit'
                           }}>
