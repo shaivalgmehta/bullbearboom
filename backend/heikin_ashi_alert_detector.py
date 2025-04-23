@@ -31,7 +31,8 @@ class HeikinAshiAlertDetector:
     def fetch_ohlc_data(self, symbol: str, 
                         market: str = 'us', 
                         days: int = 180, 
-                        end_date: Optional[datetime] = None) -> pd.DataFrame:
+                        end_date: Optional[datetime] = None,
+                        base: Optional[str] = None) -> pd.DataFrame:
         """
         Fetch OHLC data for a symbol from the appropriate table.
         
@@ -40,6 +41,7 @@ class HeikinAshiAlertDetector:
             market: Market type ('us', 'in', or 'crypto')
             days: Number of days of data to fetch
             end_date: End date for the data (defaults to current date)
+            base: Base currency for crypto (usd, eth, btc) - overrides symbol parsing
             
         Returns:
             DataFrame with OHLC data
@@ -55,10 +57,15 @@ class HeikinAshiAlertDetector:
         elif market == 'in':
             table_name = 'in_daily_table'
         elif market == 'crypto':
-            crypto_base = 'usd'  # Default base for crypto
-            if '/' in symbol:
-                # Extract base if it's in the symbol (e.g., BTC/USD)
-                _, crypto_base = symbol.split('/')
+            if base:
+                # Use the explicitly provided base
+                crypto_base = base
+            else:
+                # Extract from symbol if not provided explicitly
+                crypto_base = 'usd'  # Default base for crypto
+                if '/' in symbol:
+                    # Extract base if it's in the symbol (e.g., BTC/USD)
+                    _, crypto_base = symbol.split('/')
             table_name = f"crypto_daily_table{'_' + crypto_base.lower() if crypto_base.lower() != 'usd' else ''}"
         else:
             raise ValueError(f"Unsupported market: {market}")
@@ -86,7 +93,9 @@ class HeikinAshiAlertDetector:
         df = pd.DataFrame(data)
         return df
     
-    def detect_3d_color_changes(self, symbol: str, market: str = 'us', end_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    def detect_3d_color_changes(self, symbol: str, market: str = 'us', 
+                               end_date: Optional[datetime] = None,
+                               base: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Detect color changes in 3-day Heikin-Ashi data.
         
@@ -94,12 +103,13 @@ class HeikinAshiAlertDetector:
             symbol: Stock/crypto symbol
             market: Market type ('us', 'in', or 'crypto')
             end_date: End date for the data (defaults to current date)
+            base: Base currency for crypto (usd, eth, btc)
             
         Returns:
             List of alert dictionaries
         """
         # Need at least 180 days to calculate 3-day periods and detect changes
-        df = self.fetch_ohlc_data(symbol, market, days=180, end_date=end_date)
+        df = self.fetch_ohlc_data(symbol, market, days=180, end_date=end_date, base=base)
         
         if df.empty or len(df) < 6:  # Need at least two 3-day periods
             return []
@@ -127,7 +137,9 @@ class HeikinAshiAlertDetector:
         
         return alerts
     
-    def detect_2w_color_changes(self, symbol: str, market: str = 'us', end_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    def detect_2w_color_changes(self, symbol: str, market: str = 'us', 
+                               end_date: Optional[datetime] = None,
+                               base: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Detect color changes in 2-week Heikin-Ashi data.
         
@@ -135,12 +147,13 @@ class HeikinAshiAlertDetector:
             symbol: Stock/crypto symbol
             market: Market type ('us', 'in', or 'crypto')
             end_date: End date for the data (defaults to current date)
+            base: Base currency for crypto (usd, eth, btc)
             
         Returns:
             List of alert dictionaries
         """
         # Need at least 200 days to calculate weekly and then 2-week periods
-        df = self.fetch_ohlc_data(symbol, market, days=200, end_date=end_date)
+        df = self.fetch_ohlc_data(symbol, market, days=200, end_date=end_date, base=base)
         
         if df.empty or len(df) < 10:  # Need at least two 2-week periods (assuming 5 days per week)
             return []
@@ -171,7 +184,9 @@ class HeikinAshiAlertDetector:
         
         return alerts
     
-    def detect_all_alerts(self, symbol: str, market: str = 'us', end_date: Optional[datetime] = None) -> Dict[str, List[Dict[str, Any]]]:
+    def detect_all_alerts(self, symbol: str, market: str = 'us', 
+                         end_date: Optional[datetime] = None,
+                         base: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
         """
         Detect all Heikin-Ashi color change alerts for a symbol.
         
@@ -179,18 +194,22 @@ class HeikinAshiAlertDetector:
             symbol: Stock/crypto symbol
             market: Market type ('us', 'in', or 'crypto')
             end_date: End date for the data (defaults to current date)
+            base: Base currency for crypto (usd, eth, btc)
             
         Returns:
             Dictionary with alerts for each timeframe
         """
         alerts = {
-            '3d': self.detect_3d_color_changes(symbol, market, end_date),
-            '2w': self.detect_2w_color_changes(symbol, market, end_date)
+            '3d': self.detect_3d_color_changes(symbol, market, end_date, base),
+            '2w': self.detect_2w_color_changes(symbol, market, end_date, base)
         }
         
         return alerts
     
-    def store_alerts_in_db(self, symbol: str, market: str, alerts: Dict[str, List[Dict[str, Any]]], end_date: Optional[datetime] = None):
+    def store_alerts_in_db(self, symbol: str, market: str, 
+                          alerts: Dict[str, List[Dict[str, Any]]], 
+                          end_date: Optional[datetime] = None,
+                          base: Optional[str] = None):
         """
         Store detected Heikin-Ashi alerts in the database.
         
@@ -199,6 +218,7 @@ class HeikinAshiAlertDetector:
             market: Market type ('us', 'in', or 'crypto')
             alerts: Dictionary with alerts for each timeframe
             end_date: Date for the alerts (defaults to current date)
+            base: Base currency for crypto (usd, eth, btc)
         """
         if end_date is None:
             end_date = datetime.now()
@@ -217,10 +237,15 @@ class HeikinAshiAlertDetector:
         elif market == 'in':
             alerts_table = 'in_alerts_table'
         elif market == 'crypto':
-            crypto_base = 'usd'  # Default base for crypto
-            if '/' in symbol:
-                # Extract base if it's in the symbol (e.g., BTC/USD)
-                _, crypto_base = symbol.split('/')
+            if base:
+                # Use the explicitly provided base
+                crypto_base = base
+            else:
+                # Extract from symbol if not provided explicitly
+                crypto_base = 'usd'  # Default base for crypto
+                if '/' in symbol:
+                    # Extract base if it's in the symbol (e.g., BTC/USD)
+                    _, crypto_base = symbol.split('/')
             alerts_table = f"crypto_alerts_table{'_' + crypto_base.lower() if crypto_base.lower() != 'usd' else ''}"
         else:
             raise ValueError(f"Unsupported market: {market}")
@@ -240,6 +265,12 @@ class HeikinAshiAlertDetector:
                 elif market == 'in':
                     table_name = 'in_daily_table'
                 else:  # crypto
+                    if base:
+                        crypto_base = base
+                    else:
+                        crypto_base = 'usd'
+                        if '/' in symbol:
+                            _, crypto_base = symbol.split('/')
                     table_name = f"crypto_daily_table{'_' + crypto_base.lower() if crypto_base.lower() != 'usd' else ''}"
                 
                 # Get the name
@@ -288,7 +319,9 @@ class HeikinAshiAlertDetector:
                 
                 conn.commit()
     
-    def process_symbols(self, symbols: List[Dict[str, Any]], market: str, end_date: Optional[datetime] = None):
+    def process_symbols(self, symbols: List[Dict[str, Any]], market: str, 
+                       end_date: Optional[datetime] = None,
+                       base: Optional[str] = None):
         """
         Process a list of symbols to detect and store Heikin-Ashi alerts.
         
@@ -296,19 +329,20 @@ class HeikinAshiAlertDetector:
             symbols: List of symbol dictionaries with 'symbol' key
             market: Market type ('us', 'in', or 'crypto')
             end_date: Date for the alerts (defaults to current date)
+            base: Base currency for crypto (usd, eth, btc)
         """
         for symbol_dict in symbols:
             symbol = symbol_dict['symbol']
             try:
                 print(f"Processing {symbol} for {market} market...")
-                alerts = self.detect_all_alerts(symbol, market, end_date)
+                alerts = self.detect_all_alerts(symbol, market, end_date, base)
                 
                 # Count alerts
                 alert_count = sum(len(timeframe_alerts) for timeframe_alerts in alerts.values())
                 
                 if alert_count > 0:
                     print(f"Found {alert_count} alerts for {symbol}")
-                    self.store_alerts_in_db(symbol, market, alerts, end_date)
+                    self.store_alerts_in_db(symbol, market, alerts, end_date, base)
                 else:
                     print(f"No alerts for {symbol}")
                     

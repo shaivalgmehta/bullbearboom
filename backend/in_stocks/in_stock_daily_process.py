@@ -13,14 +13,8 @@ from get_in_stock_data import run_stock_data_process
 import json  # Import json for pretty printing
 import time
 import pytz
-import pandas as pd
 from typing import Dict, Any, List
-import sys
-sys.path.append(os.path.abspath('..'))
 
-
-# Import Heikin-Ashi transformer
-from heikin_ashi_transformer import HeikinAshiTransformer
 
 # Load environment variables
 load_dotenv()
@@ -90,88 +84,6 @@ def fetch_price_changes(symbol: str, current_date: datetime, db_params: Dict[str
         if 'conn' in locals():
             conn.close()
 
-######################### FUNCTION TO CALCULATE HEIKIN-ASHI VALUES #######################
-
-def calculate_heikin_ashi(symbol: str, current_date: datetime, db_params: Dict[str, Any]) -> bool:
-    """
-    Calculate Heikin-Ashi values for a stock and update the database
-    
-    Args:
-        symbol: Stock symbol
-        current_date: Date to calculate for
-        db_params: Database connection parameters
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    try:
-        # Get at least 30 days of data for accurate Heikin-Ashi calculation
-        start_date = current_date - timedelta(days=60)
-        
-        conn = psycopg2.connect(**db_params)
-        with conn.cursor() as cur:
-            # Fetch OHLC data
-            cur.execute("""
-                SELECT datetime, open, high, low, close
-                FROM in_daily_table
-                WHERE stock = %s
-                AND datetime BETWEEN %s AND %s
-                ORDER BY datetime
-            """, (symbol, start_date, current_date))
-            
-            rows = cur.fetchall()
-            
-            if not rows:
-                print(f"No data found for {symbol} for Heikin-Ashi calculation. Skipping.")
-                return False
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(rows, columns=['datetime', 'open', 'high', 'low', 'close'])
-            
-            # Calculate Heikin-Ashi values
-            ha_df = HeikinAshiTransformer.transform_dataframe(df)
-            
-            # Update the database with calculated values, but only for the specific date
-            update_data = []
-            for idx, row in ha_df.iterrows():
-                # Only update the specified date
-                row_date = pd.to_datetime(row['datetime']).date()
-                if row_date == current_date.date():
-                    update_data.append((
-                        float(row['ha_open']),
-                        float(row['ha_high']),
-                        float(row['ha_low']),
-                        float(row['ha_close']),
-                        row['ha_color'],
-                        row['datetime'],
-                        symbol
-                    ))
-            
-            if update_data:
-                execute_values(cur, """
-                    UPDATE in_daily_table
-                    SET 
-                        ha_open = data.ha_open,
-                        ha_high = data.ha_high,
-                        ha_low = data.ha_low,
-                        ha_close = data.ha_close,
-                        ha_color = data.ha_color
-                    FROM (VALUES %s) AS data(ha_open, ha_high, ha_low, ha_close, ha_color, datetime, stock)
-                    WHERE in_daily_table.datetime = data.datetime 
-                    AND in_daily_table.stock = data.stock
-                """, update_data)
-                
-                conn.commit()
-                return True
-            
-            return False
-
-    except Exception as e:
-        print(f"Error calculating Heikin-Ashi values for {symbol}: {str(e)}")
-        return False
-    finally:
-        if 'conn' in locals():
-            conn.close()
 
 ######################### FUNCTIONS TO PREPARE THE DATA ############################# 
 
@@ -179,6 +91,7 @@ def process_stock(stock, end_date):
     symbol = stock['symbol']
     
     try:
+
         # Fetch technical indicators
         technical_indicator = fetch_technical_indicators_twelve_data(
             symbol, db_params, TWELVE_DATA_API_KEY, store_stock_daily_data, end_date
@@ -197,15 +110,11 @@ def process_stock(stock, end_date):
             'technical_indicator': technical_indicator if technical_indicator is not None else [],
             'price_changes': price_changes
         }
-        
         # Transform the data for daily table
         stock_transformed_data = stock_data_transformer.transform(combined_data)[0]
-        
+        # print(f'{stock_transformed_data}')
         # Store the transformed data
         store_stock_data(stock_transformed_data)
-        
-        # Calculate and store Heikin-Ashi values
-        calculate_heikin_ashi(symbol, end_date, db_params)
         
         print(f"Data for {symbol} has been stored in TimescaleDB")
     except Exception as e:
@@ -221,20 +130,19 @@ def main():
     # Fetch stock list
     stocks = fetch_stock_list_twelve_data()
     end_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-    
-    # Uncomment to limit processing to a few stocks for testing
-    stocks = stocks[:5]
+    # Limit to first 3 stocks
+    # stocks = stocks[:1]
 
- #################### Run daily Indian stocks data process  #####################################
-    print(f"\nStarting daily Indian stocks data process for date {end_date}...")
-    #run_stock_data_process(end_date)
+ #################### Run daily us stocks data process  #####################################
+    print(f"\nStarting daily US stocks data process for date {end_date}...")
+    run_stock_data_process(end_date)
 
 ##################### Run statistics and EMA process ################################
-    # Get the appropriate transformers
+      # Get the appropriate transformers
     global stock_data_transformer
     stock_data_transformer = get_transformer('core_data', db_params)
   
-    # Process stocks in batches
+    # Process stocks in batches of 10
     batch_size = 800
     for i in range(0, len(stocks), batch_size):
         batch = stocks[i:i+batch_size]
