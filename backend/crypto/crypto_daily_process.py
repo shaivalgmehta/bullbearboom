@@ -17,7 +17,11 @@ import time
 import pytz
 import pandas as pd
 from typing import Dict, Any, List
+import sys
+sys.path.append(os.path.abspath('..'))
 
+# Import Heikin-Ashi transformer
+from heikin_ashi_transformer import HeikinAshiTransformer
 
 # Load environment variables
 load_dotenv()
@@ -89,6 +93,93 @@ def fetch_price_changes(symbol: str, current_date: datetime, current_price: floa
         if 'conn' in locals():
             conn.close()
 
+######################### FUNCTION TO CALCULATE HEIKIN-ASHI VALUES #######################
+
+def calculate_heikin_ashi(symbol: str, current_date: datetime, db_params: Dict[str, Any], base: str = 'usd') -> bool:
+    """
+    Calculate Heikin-Ashi values for a crypto and update the database
+    
+    Args:
+        symbol: Crypto symbol
+        current_date: Date to calculate for
+        db_params: Database connection parameters
+        base: Base currency (usd, eth, btc)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Get at least 30 days of data for accurate Heikin-Ashi calculation
+        start_date = current_date - timedelta(days=60)
+        
+        # Get table name based on base currency
+        table_name = f"crypto_daily_table{'_' + base.lower() if base.lower() != 'usd' else ''}"
+        
+        conn = psycopg2.connect(**db_params)
+        with conn.cursor() as cur:
+            # Fetch OHLC data
+            cur.execute(f"""
+                SELECT datetime, open, high, low, close
+                FROM {table_name}
+                WHERE stock = %s
+                AND datetime BETWEEN %s AND %s
+                ORDER BY datetime
+            """, (symbol, start_date, current_date))
+            
+            rows = cur.fetchall()
+            
+            if not rows:
+                print(f"No data found for {symbol}/{base} for Heikin-Ashi calculation. Skipping.")
+                return False
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(rows, columns=['datetime', 'open', 'high', 'low', 'close'])
+            
+            # Calculate Heikin-Ashi values
+            ha_df = HeikinAshiTransformer.transform_dataframe(df)
+            
+            # Update the database with calculated values, but only for the specific date
+            update_data = []
+            for idx, row in ha_df.iterrows():
+                # Only update the specified date
+                row_date = pd.to_datetime(row['datetime']).date()
+                if row_date == current_date.date():
+                    update_data.append((
+                        float(row['ha_open']),
+                        float(row['ha_high']),
+                        float(row['ha_low']),
+                        float(row['ha_close']),
+                        row['ha_color'],
+                        row['datetime'],
+                        symbol
+                    ))
+            
+            if update_data:
+                execute_values(cur, f"""
+                    UPDATE {table_name}
+                    SET 
+                        ha_open = data.ha_open,
+                        ha_high = data.ha_high,
+                        ha_low = data.ha_low,
+                        ha_close = data.ha_close,
+                        ha_color = data.ha_color
+                    FROM (VALUES %s) AS data(ha_open, ha_high, ha_low, ha_close, ha_color, datetime, stock)
+                    WHERE {table_name}.datetime = data.datetime 
+                    AND {table_name}.stock = data.stock
+                """, update_data)
+                
+                conn.commit()
+                return True
+            
+            return False
+
+    except Exception as e:
+        print(f"Error calculating Heikin-Ashi values for {symbol}/{base}: {str(e)}")
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 ######################### FUNCTIONS TO PREPARE THE DATA #############################           
 
 def process_stock(stock, base, end_date):
@@ -126,6 +217,9 @@ def process_stock(stock, base, end_date):
         
         # Store the transformed data
         store_stock_data(stock_transformed_data, base)
+        
+        # Calculate and store Heikin-Ashi values
+        calculate_heikin_ashi(symbol, end_date, db_params, base)
         
         print(f"Data for {symbol}/{base} has been stored in TimescaleDB")
     except Exception as e:

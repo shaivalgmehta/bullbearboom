@@ -19,3 +19,4 @@ sqlalchemy==2.0.36
 sec-api==1.0.25
 flask-jwt-extended==4.7.1
 bcrypt==4.3.0
+matplotlib==3.10.1
