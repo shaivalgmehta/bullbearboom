@@ -22,6 +22,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ForceIndexGraph from './ForceIndexGraph';
 import WilliamsRGraph from './WilliamsRGraph';
 import StockPriceGraph from './StockPriceGraph';
+import HeikinAshiGraph from './HeikinAshiGraph';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -65,7 +66,7 @@ const formatRatio = (value) => {
   return value.toFixed(2);
 };
 
-function US_StockDetailApp() {
+function IN_StockDetailApp() {
   const { symbol } = useParams();
   const [stockData, setStockData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,7 +76,8 @@ function US_StockDetailApp() {
   const [expandedPanels, setExpandedPanels] = useState({
     price: true,
     force: true,
-    williams: true
+    williams: true,
+    heikinAshi: true
   });
   const theme = useTheme();
 
@@ -308,6 +310,24 @@ function US_StockDetailApp() {
                 <WilliamsRGraph data={stockData?.technical_data || []} />
               </AccordionDetails>
             </Accordion>
+            
+            {/* Heikin-Ashi Chart for Indian stocks */}
+            <Accordion 
+              expanded={expandedPanels.heikinAshi}
+              onChange={handlePanelChange('heikinAshi')}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Heikin-Ashi Chart</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Heikin-Ashi charts help identify trends by smoothing price action and filtering out market noise.
+                  Use the timeframe selector to view different periods. Color changes from red to green may indicate
+                  potential bullish reversals, while green to red changes may indicate bearish reversals.
+                </Typography>
+                <HeikinAshiGraph symbol={symbol} />
+              </AccordionDetails>
+            </Accordion>
           </Box>
         </Paper>
       </Box>
@@ -315,4 +335,4 @@ function US_StockDetailApp() {
   );
 }
 
-export default US_StockDetailApp;
+export default IN_StockDetailApp;

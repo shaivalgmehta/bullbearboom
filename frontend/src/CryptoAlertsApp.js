@@ -29,7 +29,18 @@ const columnMap = {
 };
 
 const filterColumns = ['stock', 'crypto_name'];
-const alertTypeOptions = ['oversold', 'obv_positive', 'obv_negative'];
+
+// Updated to include Heikin-Ashi alert types
+const alertTypeOptions = [
+  'oversold', 
+  'obv_positive', 
+  'obv_negative', 
+  'heikin_ashi_3d_bullish', 
+  'heikin_ashi_3d_bearish', 
+  'heikin_ashi_2w_bullish', 
+  'heikin_ashi_2w_bearish'
+];
+
 const drawerWidth = 300;
 
 function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
@@ -74,7 +85,7 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
           params.append('watch_list_only', 'true');
         }
 
-        const result = await axios.get(`${API_URL}/crypto/alerts${params.toString() ? `?${params.toString()}` : ''}`);
+        const result = await axios.get(`${API_URL}/crypto/${endpoint}${params.toString() ? `?${params.toString()}` : ''}`);
 
         // Group by date
         const grouped = result.data.reduce((acc, alert) => {
@@ -213,10 +224,18 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     switch (alertType) {
       case 'oversold':
         return '#4caf50'; // Green
-       case 'obv_positive':
+      case 'obv_positive':
         return '#9c27b0'; // Purple
       case 'obv_negative':
         return '#f44336'; // Red
+      case 'heikin_ashi_3d_bullish':
+        return '#00BCD4'; // Cyan
+      case 'heikin_ashi_3d_bearish':
+        return '#FF9800'; // Orange
+      case 'heikin_ashi_2w_bullish':
+        return '#2196F3'; // Blue
+      case 'heikin_ashi_2w_bearish':
+        return '#FF5722'; // Deep Orange
       default:
         return '#757575'; // Grey
     }
@@ -227,11 +246,43 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
     switch (alertType) {
       case 'oversold':
         return 'Oversold';
-         case 'obv_positive':
+      case 'obv_positive':
         return 'OBV+';
       case 'obv_negative':
         return 'OBV-';
-       default:
+      case 'heikin_ashi_3d_bullish':
+        return 'HA-3D+';
+      case 'heikin_ashi_3d_bearish':
+        return 'HA-3D-';
+      case 'heikin_ashi_2w_bullish':
+        return 'HA-2W+';
+      case 'heikin_ashi_2w_bearish':
+        return 'HA-2W-';
+      default:
+        return alertType;
+    }
+  };
+  
+  // Function to get detailed alert description for tooltip
+  const getAlertDescription = (alertType, description) => {
+    if (description) return description;
+    
+    switch (alertType) {
+      case 'oversold':
+        return 'Cryptocurrency is potentially oversold based on Williams %R and Force Index indicators';
+      case 'obv_positive':
+        return 'On-Balance Volume (OBV) shows positive momentum';
+      case 'obv_negative':
+        return 'On-Balance Volume (OBV) shows negative momentum';
+      case 'heikin_ashi_3d_bullish':
+        return '3-day Heikin-Ashi pattern shows bullish reversal (red to green)';
+      case 'heikin_ashi_3d_bearish':
+        return '3-day Heikin-Ashi pattern shows bearish reversal (green to red)';
+      case 'heikin_ashi_2w_bullish':
+        return '2-week Heikin-Ashi pattern shows bullish reversal (red to green)';
+      case 'heikin_ashi_2w_bearish':
+        return '2-week Heikin-Ashi pattern shows bearish reversal (green to red)';
+      default:
         return alertType;
     }
   };
@@ -312,7 +363,21 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
                     onChange={() => handleAlertTypeFilterChange(option)}
                   />
                 }
-                label={getAlertLabel(option)}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <span>{getAlertLabel(option)}</span>
+                    <Chip 
+                      size="small" 
+                      sx={{ 
+                        backgroundColor: getAlertColor(option),
+                        color: 'white',
+                        fontSize: '0.6rem',
+                        height: 16,
+                        '& .MuiChip-label': { px: 0.5 }
+                      }}
+                    />
+                  </Box>
+                }
               />
             ))}
           </FormGroup>
@@ -554,7 +619,7 @@ function CryptoAlertsApp({ drawerOpen, toggleDrawer }) {
                                               {alert.alerts && alert.alerts.map((a, i) => (
                                                 <Tooltip 
                                                   key={i} 
-                                                  title={a.description || getAlertLabel(a.type)}
+                                                  title={getAlertDescription(a.type, a.description)}
                                                   placement="top"
                                                 >
                                                   <Chip

@@ -22,6 +22,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ForceIndexGraph from './ForceIndexGraph';
 import WilliamsRGraph from './WilliamsRGraph';
 import StockPriceGraph from './StockPriceGraph';
+import HeikinAshiGraph from './HeikinAshiGraph';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -75,7 +76,8 @@ function US_StockDetailApp() {
   const [expandedPanels, setExpandedPanels] = useState({
     price: true,
     force: true,
-    williams: true
+    williams: true,
+    heikinAshi: true
   });
   const theme = useTheme();
 
@@ -306,6 +308,24 @@ function US_StockDetailApp() {
                   Values below -50 combined with a Williams %R crossover above its EMA can signal potential buying opportunities.
                 </Typography>
                 <WilliamsRGraph data={stockData?.technical_data || []} />
+              </AccordionDetails>
+            </Accordion>
+            
+            {/* Unified Heikin-Ashi Chart */}
+            <Accordion 
+              expanded={expandedPanels.heikinAshi}
+              onChange={handlePanelChange('heikinAshi')}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Heikin-Ashi Chart</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Heikin-Ashi charts help identify trends by smoothing price action and filtering out market noise.
+                  Use the timeframe selector to view different periods. Color changes from red to green may indicate
+                  potential bullish reversals, while green to red changes may indicate bearish reversals.
+                </Typography>
+                <HeikinAshiGraph symbol={symbol} />
               </AccordionDetails>
             </Accordion>
           </Box>

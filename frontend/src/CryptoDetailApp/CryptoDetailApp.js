@@ -21,6 +21,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ForceIndexGraph from './ForceIndexGraph';
 import WilliamsRGraph from './WilliamsRGraph';
 import CryptoPriceGraph from './CryptoPriceGraph';
+import HeikinAshiGraph from './HeikinAshiGraph';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -83,7 +84,8 @@ function CryptoDetailApp() {
   const [expandedPanels, setExpandedPanels] = useState({
     price: true,
     force: true,
-    williams: true
+    williams: true,
+    heikinAshi: true
   });
 
   // Determine base currency from URL path
@@ -305,6 +307,27 @@ function CryptoDetailApp() {
                 </Typography>
                 <WilliamsRGraph 
                   data={cryptoData?.technical_data || []} 
+                />
+              </AccordionDetails>
+            </Accordion>
+            
+            {/* Heikin-Ashi Chart */}
+            <Accordion 
+              expanded={expandedPanels.heikinAshi}
+              onChange={handlePanelChange('heikinAshi')}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Heikin-Ashi Chart</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Heikin-Ashi charts help identify trends by smoothing price action and filtering out market noise.
+                  Use the timeframe selector to view different periods. Color changes from red to green may indicate
+                  potential bullish reversals, while green to red changes may indicate bearish reversals.
+                </Typography>
+                <HeikinAshiGraph 
+                  symbol={symbol} 
+                  base={base}
                 />
               </AccordionDetails>
             </Accordion>

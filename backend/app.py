@@ -1885,6 +1885,535 @@ def remove_from_watchlist():
     finally:
         cur.close()
         conn.close()
+######################### HEIKIN ASHI DATA #####################################
+
+@app.route('/api/stocks/<symbol>/heikin-ashi')
+def get_stock_heikin_ashi(symbol):
+    logging.info(f"Generating Heikin-Ashi data for stock {symbol}")
+    try:
+        # Get timeframe parameter
+        timeframe = request.args.get('timeframe', '3d')
+        
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            # Use a longer period for 2-week timeframe
+            days_back = 180 if timeframe == '3d' else 365
+            start_date = end_date - timedelta(days=days_back)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Fetch raw OHLC data
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume
+            FROM us_daily_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        ohlc_data = cur.fetchall()
+        
+        if not ohlc_data:
+            return jsonify({
+                "error": f"No data found for stock {symbol}"
+            }), 404
+        
+        # Convert to DataFrame
+        import pandas as pd
+        from heikin_ashi_transformer import HeikinAshiTransformer
+        
+        df = pd.DataFrame(ohlc_data)
+        
+        # Process according to timeframe
+        if timeframe == '3d':
+            # Aggregate to 3-day periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 3)
+        elif timeframe == '2w':
+            # First aggregate to weekly (5 days)
+            weekly_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 5)
+            # Then aggregate to 2-week periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(weekly_df, 2)
+        else:
+            return jsonify({
+                "error": f"Invalid timeframe: {timeframe}"
+            }), 400
+        
+        # Calculate Heikin-Ashi values
+        ha_df = HeikinAshiTransformer.transform_dataframe(agg_df)
+        
+        # Detect color changes
+        color_changes = []
+        for i in range(1, len(ha_df)):
+            current = ha_df.iloc[i].to_dict()
+            previous = ha_df.iloc[i-1].to_dict()
+            
+            change = HeikinAshiTransformer.detect_color_change(current, previous)
+            if change:
+                change_type = "bullish" if change == "red_to_green" else "bearish"
+                color_changes.append({
+                    "datetime": current['datetime'].isoformat() if hasattr(current['datetime'], 'isoformat') else current['datetime'],
+                    "type": change_type,
+                    "description": f"Color change from {change}"
+                })
+        
+        # Convert DataFrame to list of dicts for JSON response
+        ha_data = ha_df.to_dict('records')
+        
+        # Ensure datetime is a string
+        for item in ha_data:
+            if hasattr(item['datetime'], 'isoformat'):
+                item['datetime'] = item['datetime'].isoformat()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "ha_data": ha_data,
+            "color_changes": color_changes
+        })
+        
+    except Exception as e:
+        logging.error(f"Error generating Heikin-Ashi data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/in_stocks/<symbol>/heikin-ashi')
+def get_in_stock_heikin_ashi(symbol):
+    logging.info(f"Generating Heikin-Ashi data for IN stock {symbol}")
+    try:
+        # Get timeframe parameter
+        timeframe = request.args.get('timeframe', '3d')
+        
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            # Use a longer period for 2-week timeframe
+            days_back = 180 if timeframe == '3d' else 365
+            start_date = end_date - timedelta(days=days_back)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Fetch raw OHLC data
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume
+            FROM in_daily_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        ohlc_data = cur.fetchall()
+        
+        if not ohlc_data:
+            return jsonify({
+                "error": f"No data found for IN stock {symbol}"
+            }), 404
+        
+        # Convert to DataFrame
+        import pandas as pd
+        from heikin_ashi_transformer import HeikinAshiTransformer
+        
+        df = pd.DataFrame(ohlc_data)
+        
+        # Process according to timeframe
+        if timeframe == '3d':
+            # Aggregate to 3-day periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 3)
+        elif timeframe == '2w':
+            # First aggregate to weekly (5 days)
+            weekly_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 5)
+            # Then aggregate to 2-week periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(weekly_df, 2)
+        else:
+            return jsonify({
+                "error": f"Invalid timeframe: {timeframe}"
+            }), 400
+        
+        # Calculate Heikin-Ashi values
+        ha_df = HeikinAshiTransformer.transform_dataframe(agg_df)
+        
+        # Detect color changes
+        color_changes = []
+        for i in range(1, len(ha_df)):
+            current = ha_df.iloc[i].to_dict()
+            previous = ha_df.iloc[i-1].to_dict()
+            
+            change = HeikinAshiTransformer.detect_color_change(current, previous)
+            if change:
+                change_type = "bullish" if change == "red_to_green" else "bearish"
+                color_changes.append({
+                    "datetime": current['datetime'].isoformat() if hasattr(current['datetime'], 'isoformat') else current['datetime'],
+                    "type": change_type,
+                    "description": f"Color change from {change}"
+                })
+        
+        # Convert DataFrame to list of dicts for JSON response
+        ha_data = ha_df.to_dict('records')
+        
+        # Ensure datetime is a string
+        for item in ha_data:
+            if hasattr(item['datetime'], 'isoformat'):
+                item['datetime'] = item['datetime'].isoformat()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "ha_data": ha_data,
+            "color_changes": color_changes
+        })
+        
+    except Exception as e:
+        logging.error(f"Error generating Heikin-Ashi data for IN stock {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/<symbol>/heikin-ashi')
+def get_crypto_heikin_ashi(symbol):
+    logging.info(f"Generating Heikin-Ashi data for crypto {symbol} (USD base)")
+    try:
+        # Get timeframe parameter
+        timeframe = request.args.get('timeframe', '3d')
+        
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            # Use a longer period for 2-week timeframe
+            days_back = 180 if timeframe == '3d' else 365
+            start_date = end_date - timedelta(days=days_back)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Fetch raw OHLC data
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume
+            FROM crypto_daily_table
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        ohlc_data = cur.fetchall()
+        
+        if not ohlc_data:
+            return jsonify({
+                "error": f"No data found for crypto {symbol}"
+            }), 404
+        
+        # Convert to DataFrame
+        import pandas as pd
+        from heikin_ashi_transformer import HeikinAshiTransformer
+        
+        df = pd.DataFrame(ohlc_data)
+        
+        # Process according to timeframe
+        if timeframe == '3d':
+            # Aggregate to 3-day periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 3)
+        elif timeframe == '2w':
+            # First aggregate to weekly (7 days for crypto since they trade 7 days/week)
+            weekly_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 7)
+            # Then aggregate to 2-week periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(weekly_df, 2)
+        else:
+            return jsonify({
+                "error": f"Invalid timeframe: {timeframe}"
+            }), 400
+        
+        # Calculate Heikin-Ashi values
+        ha_df = HeikinAshiTransformer.transform_dataframe(agg_df)
+        
+        # Detect color changes
+        color_changes = []
+        for i in range(1, len(ha_df)):
+            current = ha_df.iloc[i].to_dict()
+            previous = ha_df.iloc[i-1].to_dict()
+            
+            change = HeikinAshiTransformer.detect_color_change(current, previous)
+            if change:
+                change_type = "bullish" if change == "red_to_green" else "bearish"
+                color_changes.append({
+                    "datetime": current['datetime'].isoformat() if hasattr(current['datetime'], 'isoformat') else current['datetime'],
+                    "type": change_type,
+                    "description": f"Color change from {change}"
+                })
+        
+        # Convert DataFrame to list of dicts for JSON response
+        ha_data = ha_df.to_dict('records')
+        
+        # Ensure datetime is a string
+        for item in ha_data:
+            if hasattr(item['datetime'], 'isoformat'):
+                item['datetime'] = item['datetime'].isoformat()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "symbol": symbol,
+            "base": "USD",
+            "timeframe": timeframe,
+            "ha_data": ha_data,
+            "color_changes": color_changes
+        })
+        
+    except Exception as e:
+        logging.error(f"Error generating Heikin-Ashi data for crypto {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/<symbol>/heikin-ashi-eth')
+def get_crypto_heikin_ashi_eth(symbol):
+    logging.info(f"Generating Heikin-Ashi data for crypto {symbol} (ETH base)")
+    try:
+        # Get timeframe parameter
+        timeframe = request.args.get('timeframe', '3d')
+        
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            # Use a longer period for 2-week timeframe
+            days_back = 180 if timeframe == '3d' else 365
+            start_date = end_date - timedelta(days=days_back)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Fetch raw OHLC data
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume
+            FROM crypto_daily_table_eth
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        ohlc_data = cur.fetchall()
+        
+        if not ohlc_data:
+            return jsonify({
+                "error": f"No data found for crypto {symbol} (ETH base)"
+            }), 404
+        
+        # Convert to DataFrame
+        import pandas as pd
+        from heikin_ashi_transformer import HeikinAshiTransformer
+        
+        df = pd.DataFrame(ohlc_data)
+        
+        # Process according to timeframe
+        if timeframe == '3d':
+            # Aggregate to 3-day periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 3)
+        elif timeframe == '2w':
+            # First aggregate to weekly (7 days for crypto since they trade 7 days/week)
+            weekly_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 7)
+            # Then aggregate to 2-week periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(weekly_df, 2)
+        else:
+            return jsonify({
+                "error": f"Invalid timeframe: {timeframe}"
+            }), 400
+        
+        # Calculate Heikin-Ashi values
+        ha_df = HeikinAshiTransformer.transform_dataframe(agg_df)
+        
+        # Detect color changes
+        color_changes = []
+        for i in range(1, len(ha_df)):
+            current = ha_df.iloc[i].to_dict()
+            previous = ha_df.iloc[i-1].to_dict()
+            
+            change = HeikinAshiTransformer.detect_color_change(current, previous)
+            if change:
+                change_type = "bullish" if change == "red_to_green" else "bearish"
+                color_changes.append({
+                    "datetime": current['datetime'].isoformat() if hasattr(current['datetime'], 'isoformat') else current['datetime'],
+                    "type": change_type,
+                    "description": f"Color change from {change}"
+                })
+        
+        # Convert DataFrame to list of dicts for JSON response
+        ha_data = ha_df.to_dict('records')
+        
+        # Ensure datetime is a string
+        for item in ha_data:
+            if hasattr(item['datetime'], 'isoformat'):
+                item['datetime'] = item['datetime'].isoformat()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "symbol": symbol,
+            "base": "ETH",
+            "timeframe": timeframe,
+            "ha_data": ha_data,
+            "color_changes": color_changes
+        })
+        
+    except Exception as e:
+        logging.error(f"Error generating Heikin-Ashi data for crypto {symbol} (ETH base): {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crypto/<symbol>/heikin-ashi-btc')
+def get_crypto_heikin_ashi_btc(symbol):
+    logging.info(f"Generating Heikin-Ashi data for crypto {symbol} (BTC base)")
+    try:
+        # Get timeframe parameter
+        timeframe = request.args.get('timeframe', '3d')
+        
+        # Get date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            end_date = datetime.now().date()
+            # Use a longer period for 2-week timeframe
+            days_back = 180 if timeframe == '3d' else 365
+            start_date = end_date - timedelta(days=days_back)
+        else:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Fetch raw OHLC data
+        cur.execute("""
+            SELECT 
+                datetime,
+                open,
+                high,
+                low,
+                close,
+                volume
+            FROM crypto_daily_table_btc
+            WHERE stock = %s
+            AND datetime BETWEEN %s AND %s
+            ORDER BY datetime ASC
+        """, (symbol, start_date, end_date))
+        
+        ohlc_data = cur.fetchall()
+        
+        if not ohlc_data:
+            return jsonify({
+                "error": f"No data found for crypto {symbol} (BTC base)"
+            }), 404
+        
+        # Convert to DataFrame
+        import pandas as pd
+        from heikin_ashi_transformer import HeikinAshiTransformer
+        
+        df = pd.DataFrame(ohlc_data)
+        
+        # Process according to timeframe
+        if timeframe == '3d':
+            # Aggregate to 3-day periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 3)
+        elif timeframe == '2w':
+            # First aggregate to weekly (7 days for crypto since they trade 7 days/week)
+            weekly_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 7)
+            # Then aggregate to 2-week periods
+            agg_df = HeikinAshiTransformer.aggregate_to_custom_periods(weekly_df, 2)
+        else:
+            return jsonify({
+                "error": f"Invalid timeframe: {timeframe}"
+            }), 400
+        
+        # Calculate Heikin-Ashi values
+        ha_df = HeikinAshiTransformer.transform_dataframe(agg_df)
+        
+        # Detect color changes
+        color_changes = []
+        for i in range(1, len(ha_df)):
+            current = ha_df.iloc[i].to_dict()
+            previous = ha_df.iloc[i-1].to_dict()
+            
+            change = HeikinAshiTransformer.detect_color_change(current, previous)
+            if change:
+                change_type = "bullish" if change == "red_to_green" else "bearish"
+                color_changes.append({
+                    "datetime": current['datetime'].isoformat() if hasattr(current['datetime'], 'isoformat') else current['datetime'],
+                    "type": change_type,
+                    "description": f"Color change from {change}"
+                })
+        
+        # Convert DataFrame to list of dicts for JSON response
+        ha_data = ha_df.to_dict('records')
+        
+        # Ensure datetime is a string
+        for item in ha_data:
+            if hasattr(item['datetime'], 'isoformat'):
+                item['datetime'] = item['datetime'].isoformat()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "symbol": symbol,
+            "base": "BTC",
+            "timeframe": timeframe,
+            "ha_data": ha_data,
+            "color_changes": color_changes
+        })
+        
+    except Exception as e:
+        logging.error(f"Error generating Heikin-Ashi data for crypto {symbol} (BTC base): {e}")
+        return jsonify({"error": str(e)}), 500        
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
