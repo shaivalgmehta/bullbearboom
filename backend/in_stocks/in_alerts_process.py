@@ -24,12 +24,6 @@ def get_db_connection():
 def process_alerts(date):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # First, clear existing alerts for this date
-            cur.execute("""
-                DELETE FROM in_alerts_table
-                WHERE DATE(datetime) = DATE(%s)
-            """, (date,))
-            
             # Find all potential alert conditions
             cur.execute("""
                 SELECT 
@@ -49,7 +43,7 @@ def process_alerts(date):
             """, (date,))
             
             stock_alerts = cur.fetchall()
-            alerts_to_insert = []
+            new_alerts_by_stock = {}
             
             for alert in stock_alerts:
                 datetime_val, stock, stock_name, williams_alert, force_index_alert, obv_alert = alert
@@ -57,7 +51,7 @@ def process_alerts(date):
                 # Only process stocks that have at least one active alert
                 active_alerts = []
                 
-                # Check for oversold alert (original logic: williams_r_momentum_alert = $$$ AND force_index_alert = $$$)
+                # Check for oversold alert
                 if williams_alert == '$$$' and force_index_alert == '$$$':
                     active_alerts.append({
                         "type": "oversold",
@@ -65,7 +59,6 @@ def process_alerts(date):
                         "description": "Force Index Alert & Williams R Alert triggered"
                     })
                 
-            
                 if obv_alert == '$$$' and williams_alert == '$$$' and force_index_alert == '$$$':
                     active_alerts.append({
                         "type": "obv_positive",
@@ -80,15 +73,65 @@ def process_alerts(date):
                         "description": "OBV Negative Crossover"
                     })
                 
-                # Only insert if there are active alerts
+                # Only include stocks with active alerts
                 if active_alerts:
-                    alerts_to_insert.append((
-                        datetime_val,
+                    new_alerts_by_stock[stock] = {
+                        "datetime_val": datetime_val,
+                        "stock": stock,
+                        "stock_name": stock_name,
+                        "alerts": active_alerts
+                    }
+            
+            # Now fetch existing alerts to merge with new ones
+            existing_alerts = {}
+            cur.execute("""
+                SELECT stock, alerts 
+                FROM in_alerts_table
+                WHERE DATE(datetime) = DATE(%s)
+            """, (date,))
+            
+            for row in cur.fetchall():
+                existing_alerts[row[0]] = json.loads(row[1]) if row[1] else []
+            
+            # Prepare final data with merged alerts
+            alerts_to_insert = []
+            alerts_to_update = []
+            
+            # Process stocks with new alerts
+            for stock, data in new_alerts_by_stock.items():
+                if stock in existing_alerts:
+                    # Merge alerts, avoiding duplicates
+                    existing_types = {alert['type'] for alert in existing_alerts[stock]}
+                    merged_alerts = existing_alerts[stock].copy()
+                    
+                    for new_alert in data['alerts']:
+                        if new_alert['type'] not in existing_types:
+                            merged_alerts.append(new_alert)
+                    
+                    alerts_to_update.append((
+                        json.dumps(merged_alerts),
                         stock,
-                        stock_name,
-                        json.dumps(active_alerts)
+                        date
+                    ))
+                else:
+                    # Insert new record
+                    alerts_to_insert.append((
+                        data['datetime_val'],
+                        stock,
+                        data['stock_name'],
+                        json.dumps(data['alerts'])
                     ))
             
+            # Execute updates
+            if alerts_to_update:
+                for alerts_json, stock_symbol, alert_date in alerts_to_update:
+                    cur.execute("""
+                        UPDATE in_alerts_table
+                        SET alerts = %s
+                        WHERE stock = %s AND DATE(datetime) = DATE(%s)
+                    """, (alerts_json, stock_symbol, alert_date))
+            
+            # Execute inserts
             if alerts_to_insert:
                 execute_values(cur, """
                     INSERT INTO in_alerts_table (
@@ -98,7 +141,7 @@ def process_alerts(date):
                 """, alerts_to_insert)
             
             conn.commit()
-            return len(alerts_to_insert)
+            return len(alerts_to_insert) + len(alerts_to_update)
 
 def main():
     current_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)

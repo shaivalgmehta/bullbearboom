@@ -5,12 +5,6 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import pytz
 import json
-import pandas as pd
-import sys
-sys.path.append(os.path.abspath('..'))
-
-# Import Heikin-Ashi transformer for alert detection
-from heikin_ashi_transformer import HeikinAshiTransformer
 
 # Load environment variables
 load_dotenv()
@@ -27,170 +21,9 @@ db_params = {
 def get_db_connection():
     return psycopg2.connect(**db_params)
 
-def detect_3day_ha_color_changes(symbol, date, lookback_days=90):
-    """
-    Detect color changes in 3-day Heikin-Ashi data for a specific stock
-    
-    Args:
-        symbol: Stock symbol
-        date: Date to check for color changes
-        lookback_days: Number of days to look back
-        
-    Returns:
-        List of alerts or empty list if no alerts
-    """
-    start_date = date - timedelta(days=lookback_days)
-    
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT datetime, open, high, low, close
-                    FROM us_daily_table
-                    WHERE stock = %s
-                    AND datetime BETWEEN %s AND %s
-                    ORDER BY datetime
-                """, (symbol, start_date, date))
-                
-                rows = cur.fetchall()
-        
-        if not rows or len(rows) < 6:  # Need at least 6 days for two 3-day periods
-            return []
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(rows, columns=['datetime', 'open', 'high', 'low', 'close'])
-        
-        # Aggregate to 3-day periods
-        agg_3d = HeikinAshiTransformer.aggregate_to_custom_periods(df, 3)
-        
-        # Apply Heikin-Ashi transformation
-        ha_3d = HeikinAshiTransformer.transform_dataframe(agg_3d)
-        
-        # Check for color changes
-        if len(ha_3d) < 2:
-            return []
-        
-        # Get latest two periods
-        current = ha_3d.iloc[-1].to_dict()
-        previous = ha_3d.iloc[-2].to_dict()
-        
-        # Check if the last aggregated period includes our target date
-        current_period_end = pd.to_datetime(current['datetime']).date()
-        if current_period_end != date.date():
-            return []
-        
-        # Detect color change
-        change = HeikinAshiTransformer.detect_color_change(current, previous)
-        if not change:
-            return []
-        
-        # Create alert based on change type
-        if change == "red_to_green":
-            return [{
-                "type": "heikin_ashi_3d_bullish",
-                "value": change,
-                "description": "3-day Heikin-Ashi color change: Bearish to Bullish"
-            }]
-        elif change == "green_to_red":
-            return [{
-                "type": "heikin_ashi_3d_bearish",
-                "value": change,
-                "description": "3-day Heikin-Ashi color change: Bullish to Bearish"
-            }]
-    except Exception as e:
-        print(f"Error detecting 3-day Heikin-Ashi color changes for {symbol}: {str(e)}")
-    
-    return []
-
-def detect_2week_ha_color_changes(symbol, date, lookback_days=200):
-    """
-    Detect color changes in 2-week Heikin-Ashi data for a specific stock
-    
-    Args:
-        symbol: Stock symbol
-        date: Date to check for color changes
-        lookback_days: Number of days to look back
-        
-    Returns:
-        List of alerts or empty list if no alerts
-    """
-    start_date = date - timedelta(days=lookback_days)
-    
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT datetime, open, high, low, close
-                    FROM us_daily_table
-                    WHERE stock = %s
-                    AND datetime BETWEEN %s AND %s
-                    ORDER BY datetime
-                """, (symbol, start_date, date))
-                
-                rows = cur.fetchall()
-        
-        if not rows or len(rows) < 20:  # Need at least 20 days for two 2-week periods (assuming 5 days/week)
-            return []
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(rows, columns=['datetime', 'open', 'high', 'low', 'close'])
-        
-        # First aggregate to weekly (5 trading days)
-        weekly_df = HeikinAshiTransformer.aggregate_to_custom_periods(df, 5)
-        
-        # Then aggregate to 2-week periods
-        agg_2w = HeikinAshiTransformer.aggregate_to_custom_periods(weekly_df, 2)
-        
-        # Apply Heikin-Ashi transformation
-        ha_2w = HeikinAshiTransformer.transform_dataframe(agg_2w)
-        
-        # Check for color changes
-        if len(ha_2w) < 2:
-            return []
-        
-        # Get latest two periods
-        current = ha_2w.iloc[-1].to_dict()
-        previous = ha_2w.iloc[-2].to_dict()
-        
-        # Check if the last aggregated period includes our target date
-        current_period_end = pd.to_datetime(current['datetime']).date()
-        # Allow a few days of tolerance since it's a 2-week period
-        date_diff = abs((current_period_end - date.date()).days)
-        if date_diff > 5:  # More than 5 days difference, probably not the right period
-            return []
-        
-        # Detect color change
-        change = HeikinAshiTransformer.detect_color_change(current, previous)
-        if not change:
-            return []
-        
-        # Create alert based on change type
-        if change == "red_to_green":
-            return [{
-                "type": "heikin_ashi_2w_bullish",
-                "value": change,
-                "description": "2-week Heikin-Ashi color change: Bearish to Bullish"
-            }]
-        elif change == "green_to_red":
-            return [{
-                "type": "heikin_ashi_2w_bearish",
-                "value": change,
-                "description": "2-week Heikin-Ashi color change: Bullish to Bearish"
-            }]
-    except Exception as e:
-        print(f"Error detecting 2-week Heikin-Ashi color changes for {symbol}: {str(e)}")
-    
-    return []
-
 def process_alerts(date):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # First, clear existing alerts for this date
-            cur.execute("""
-                DELETE FROM us_alerts_table
-                WHERE DATE(datetime) = DATE(%s)
-            """, (date,))
-            
             # Find all potential alert conditions
             cur.execute("""
                 SELECT 
@@ -210,7 +43,7 @@ def process_alerts(date):
             """, (date,))
             
             stock_alerts = cur.fetchall()
-            alerts_to_insert = []
+            new_alerts_by_stock = {}
             
             for alert in stock_alerts:
                 datetime_val, stock, stock_name, williams_alert, force_index_alert, obv_alert = alert
@@ -218,7 +51,6 @@ def process_alerts(date):
                 # Only process stocks that have at least one active alert
                 active_alerts = []
                 
-                # Check for existing alert conditions
                 if williams_alert == '$$$' and force_index_alert == '$$$':
                     active_alerts.append({
                         "type": "oversold",
@@ -240,23 +72,65 @@ def process_alerts(date):
                         "description": "OBV Negative Crossover"
                     })
                 
-                # Check for Heikin-Ashi alerts
-                ha_3d_alerts = detect_3day_ha_color_changes(stock, date)
-                ha_2w_alerts = detect_2week_ha_color_changes(stock, date)
-                
-                # Add Heikin-Ashi alerts to active alerts
-                active_alerts.extend(ha_3d_alerts)
-                active_alerts.extend(ha_2w_alerts)
-                
-                # Only insert if there are active alerts
+                # Only include stocks with active alerts
                 if active_alerts:
-                    alerts_to_insert.append((
-                        datetime_val,
+                    new_alerts_by_stock[stock] = {
+                        "datetime_val": datetime_val,
+                        "stock": stock,
+                        "stock_name": stock_name,
+                        "alerts": active_alerts
+                    }
+            
+            # Now fetch existing alerts to merge with new ones
+            existing_alerts = {}
+            cur.execute("""
+                SELECT stock, alerts 
+                FROM us_alerts_table
+                WHERE DATE(datetime) = DATE(%s)
+            """, (date,))
+            
+            for row in cur.fetchall():
+                existing_alerts[row[0]] = json.loads(row[1]) if row[1] else []
+            
+            # Prepare final data with merged alerts
+            alerts_to_insert = []
+            alerts_to_update = []
+            
+            # Process stocks with new alerts
+            for stock, data in new_alerts_by_stock.items():
+                if stock in existing_alerts:
+                    # Merge alerts, avoiding duplicates
+                    existing_types = {alert['type'] for alert in existing_alerts[stock]}
+                    merged_alerts = existing_alerts[stock].copy()
+                    
+                    for new_alert in data['alerts']:
+                        if new_alert['type'] not in existing_types:
+                            merged_alerts.append(new_alert)
+                    
+                    alerts_to_update.append((
+                        json.dumps(merged_alerts),
                         stock,
-                        stock_name,
-                        json.dumps(active_alerts)
+                        date
+                    ))
+                else:
+                    # Insert new record
+                    alerts_to_insert.append((
+                        data['datetime_val'],
+                        stock,
+                        data['stock_name'],
+                        json.dumps(data['alerts'])
                     ))
             
+            # Execute updates
+            if alerts_to_update:
+                for alerts_json, stock_symbol, alert_date in alerts_to_update:
+                    cur.execute("""
+                        UPDATE us_alerts_table
+                        SET alerts = %s
+                        WHERE stock = %s AND DATE(datetime) = DATE(%s)
+                    """, (alerts_json, stock_symbol, alert_date))
+            
+            # Execute inserts
             if alerts_to_insert:
                 execute_values(cur, """
                     INSERT INTO us_alerts_table (
@@ -266,7 +140,7 @@ def process_alerts(date):
                 """, alerts_to_insert)
             
             conn.commit()
-            return len(alerts_to_insert)
+            return len(alerts_to_insert) + len(alerts_to_update)
 
 def main():
     current_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0)

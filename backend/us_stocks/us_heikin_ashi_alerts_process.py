@@ -50,14 +50,15 @@ def smart_heikin_ashi_scheduler(market='us', date=None, limit=None, force_timefr
     
     if not timeframes:
         today = date.date()
-        
+        print(f'{today.weekday()}')
+       
         # Process 3-day timeframe every 3 days
         # Check if the day of month is divisible by 3
         if today.day % 1 == 0:
             timeframes.append('3d')
         
         # Process 2-week timeframe on Mondays
-        if today.weekday() == 0:  # Monday is 0
+        if today.weekday() == 6:  # Monday is 0
             timeframes.append('2w')
     
     if not timeframes:

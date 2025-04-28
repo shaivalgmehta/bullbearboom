@@ -62,7 +62,7 @@ def smart_crypto_heikin_ashi_scheduler(date=None, limit=None, force_timeframes=N
             timeframes.append('3d')
         
         # Process 2-week timeframe on Mondays
-        if today.weekday() == 0:  # Monday is 0
+        if today.weekday() == 6:  # Monday is 0
             timeframes.append('2w')
     
     if not timeframes:
