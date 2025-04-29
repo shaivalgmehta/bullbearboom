@@ -1,6 +1,6 @@
 import os
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extras import execute_values, RealDictCursor  # Added RealDictCursor
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import pytz
@@ -90,7 +90,20 @@ def process_alerts(date):
             """, (date,))
             
             for row in cur.fetchall():
-                existing_alerts[row[0]] = json.loads(row[1]) if row[1] else []
+                # Fix: Handle the case when alerts is already a list or still a JSON string
+                alerts_data = row[1]
+                if alerts_data:
+                    if isinstance(alerts_data, str):
+                        try:
+                            existing_alerts[row[0]] = json.loads(alerts_data)
+                        except json.JSONDecodeError:
+                            print(f"Warning: Invalid JSON for stock {row[0]}: {alerts_data}")
+                            existing_alerts[row[0]] = []
+                    else:
+                        # It's already a list or other Python object
+                        existing_alerts[row[0]] = alerts_data
+                else:
+                    existing_alerts[row[0]] = []
             
             # Prepare final data with merged alerts
             alerts_to_insert = []

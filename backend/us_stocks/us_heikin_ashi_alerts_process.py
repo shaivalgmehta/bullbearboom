@@ -6,10 +6,36 @@ from datetime import datetime, timedelta
 import pytz
 from dotenv import load_dotenv
 import sys
-sys.path.append(os.path.abspath('..'))
+import json  # Add import for JSON handling
 
-# Import the necessary tools from your existing code
-from heikin_ashi_alert_detector import HeikinAshiAlertDetector
+# Fix path to reliably find the parent directory regardless of where the script is run from
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, PARENT_DIR)
+
+
+try:
+    # Import the necessary tools from your existing code
+    from heikin_ashi_alert_detector import HeikinAshiAlertDetector
+    print("Successfully imported HeikinAshiAlertDetector")
+except ImportError as e:
+    print(f"Error importing HeikinAshiAlertDetector: {e}")
+    # Try to find the module
+    detector_file = None
+    for root, dirs, files in os.walk(PARENT_DIR):
+        if 'heikin_ashi_alert_detector.py' in files:
+            detector_dir = root
+            sys.path.insert(0, detector_dir)
+            print(f"Found detector at {os.path.join(root, 'heikin_ashi_alert_detector.py')}")
+            try:
+                from heikin_ashi_alert_detector import HeikinAshiAlertDetector
+                print(f"Successfully imported from {detector_dir}")
+                break
+            except ImportError as e2:
+                print(f"Still couldn't import: {e2}")
+    
+    if 'HeikinAshiAlertDetector' not in globals():
+        sys.exit("Could not find heikin_ashi_alert_detector.py in the project. Exiting.")
 
 # Load environment variables
 load_dotenv()
@@ -52,13 +78,11 @@ def smart_heikin_ashi_scheduler(market='us', date=None, limit=None, force_timefr
         today = date.date()
         print(f'{today.weekday()}')
        
-        # Process 3-day timeframe every 3 days
-        # Check if the day of month is divisible by 3
-        if today.day % 1 == 0:
-            timeframes.append('3d')
+        # Process 3-day timeframe every day (can be optimized later)
+        timeframes.append('3d')
         
-        # Process 2-week timeframe on Mondays
-        if today.weekday() == 6:  # Monday is 0
+        # Process 2-week timeframe on Sundays
+        if today.weekday() == 6:  
             timeframes.append('2w')
     
     if not timeframes:
@@ -108,7 +132,14 @@ def smart_heikin_ashi_scheduler(market='us', date=None, limit=None, force_timefr
                 
                 if alert_count > 0:
                     print(f"    Found {alert_count} alerts for {symbol}")
-                    detector.store_alerts_in_db(symbol, market, alerts, date)
+                    try:
+                        detector.store_alerts_in_db(symbol, market, alerts, date)
+                    except Exception as e:
+                        print(f"    Error storing alerts for {symbol}: {str(e)}")
+                        # Let's get more info about the object that's causing the error
+                        print(f"    Alert data: {type(alerts)}")
+                        for timeframe, alerts_list in alerts.items():
+                            print(f"      {timeframe}: {type(alerts_list)} with {len(alerts_list)} items")
             except Exception as e:
                 print(f"    Error processing {symbol}: {str(e)}")
     

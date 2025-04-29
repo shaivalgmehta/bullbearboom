@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from heikin_ashi_transformer import HeikinAshiTransformer
+import traceback  # Add for detailed error tracing
 
 class HeikinAshiAlertDetector:
     """
@@ -226,98 +227,125 @@ class HeikinAshiAlertDetector:
         # Flatten all alerts into a single list
         all_alerts = []
         for timeframe, timeframe_alerts in alerts.items():
+            if not isinstance(timeframe_alerts, list):
+                print(f"Warning: timeframe_alerts for {timeframe} is not a list: {type(timeframe_alerts)}")
+                continue
             all_alerts.extend(timeframe_alerts)
             
         if not all_alerts:
             return  # No alerts to store
+        
+        # Print debug info about the alerts
+        print(f"Debug - Total alerts to store for {symbol}: {len(all_alerts)}")
+        for i, alert in enumerate(all_alerts):
+            print(f"  Alert {i+1}: type={alert.get('type', 'N/A')}")
             
         # Determine the appropriate alerts table
         if market == 'us':
             alerts_table = 'us_alerts_table'
+            name_field = 'stock_name'
+            table_name = 'us_daily_table'
         elif market == 'in':
             alerts_table = 'in_alerts_table'
+            name_field = 'stock_name'
+            table_name = 'in_daily_table'
         elif market == 'crypto':
             if base:
-                # Use the explicitly provided base
-                crypto_base = base
+                crypto_base = base.lower()
             else:
-                # Extract from symbol if not provided explicitly
                 crypto_base = 'usd'  # Default base for crypto
                 if '/' in symbol:
                     # Extract base if it's in the symbol (e.g., BTC/USD)
                     _, crypto_base = symbol.split('/')
-            alerts_table = f"crypto_alerts_table{'_' + crypto_base.lower() if crypto_base.lower() != 'usd' else ''}"
+                    crypto_base = crypto_base.lower()
+            
+            alerts_table = f"crypto_alerts_table{'_' + crypto_base if crypto_base != 'usd' else ''}"
+            name_field = 'crypto_name'
+            table_name = f"crypto_daily_table{'_' + crypto_base if crypto_base != 'usd' else ''}"
         else:
             raise ValueError(f"Unsupported market: {market}")
             
-        # Get the stock_name/crypto_name
-        with self.get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # First, check if an alert for this stock on this date already exists
-                if market == 'crypto':
-                    name_field = 'crypto_name'
-                else:
-                    name_field = 'stock_name'
-                    
-                # Determine the appropriate table for getting the name
-                if market == 'us':
-                    table_name = 'us_daily_table'
-                elif market == 'in':
-                    table_name = 'in_daily_table'
-                else:  # crypto
-                    if base:
-                        crypto_base = base
-                    else:
-                        crypto_base = 'usd'
-                        if '/' in symbol:
-                            _, crypto_base = symbol.split('/')
-                    table_name = f"crypto_daily_table{'_' + crypto_base.lower() if crypto_base.lower() != 'usd' else ''}"
-                
-                # Get the name
-                cur.execute(f"""
-                    SELECT {name_field}
-                    FROM {table_name}
-                    WHERE stock = %s
-                    ORDER BY datetime DESC
-                    LIMIT 1
-                """, (symbol,))
-                
-                name_result = cur.fetchone()
-                entity_name = name_result[0] if name_result else symbol
-                
-                # Check if an alert exists for this date
-                cur.execute(f"""
-                    SELECT alerts
-                    FROM {alerts_table}
-                    WHERE stock = %s AND DATE(datetime) = DATE(%s)
-                """, (symbol, end_date))
-                
-                existing_result = cur.fetchone()
-                
-                if existing_result:
-                    # Update existing alert
-                    existing_alerts = json.loads(existing_result[0]) if existing_result[0] else []
-                    
-                    # Add new alerts, avoiding duplicates
-                    existing_alert_types = {a['type'] for a in existing_alerts}
-                    for alert in all_alerts:
-                        if alert['type'] not in existing_alert_types:
-                            existing_alerts.append(alert)
-                            existing_alert_types.add(alert['type'])
-                    
+        try:
+            # Get the stock_name/crypto_name and handle alerts
+            with self.get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    # Get the name
                     cur.execute(f"""
-                        UPDATE {alerts_table}
-                        SET alerts = %s
+                        SELECT {name_field}
+                        FROM {table_name}
+                        WHERE stock = %s
+                        ORDER BY datetime DESC
+                        LIMIT 1
+                    """, (symbol,))
+                    
+                    name_result = cur.fetchone()
+                    entity_name = name_result[0] if name_result else symbol
+                    
+                    # Check if an alert exists for this date
+                    cur.execute(f"""
+                        SELECT alerts
+                        FROM {alerts_table}
                         WHERE stock = %s AND DATE(datetime) = DATE(%s)
-                    """, (json.dumps(existing_alerts), symbol, end_date))
-                else:
-                    # Insert new alert
-                    cur.execute(f"""
-                        INSERT INTO {alerts_table} (datetime, stock, {name_field}, alerts)
-                        VALUES (%s, %s, %s, %s)
-                    """, (end_date, symbol, entity_name, json.dumps(all_alerts)))
-                
-                conn.commit()
+                    """, (symbol, end_date))
+                    
+                    existing_result = cur.fetchone()
+                    
+                    if existing_result:
+                        # Safely handle existing alerts
+                        existing_alerts = []
+                        alerts_data = existing_result[0]
+                        
+                        # Handle the case when alerts is already a list or still a JSON string
+                        if alerts_data is not None:
+                            if isinstance(alerts_data, str):
+                                try:
+                                    existing_alerts = json.loads(alerts_data)
+                                except json.JSONDecodeError:
+                                    print(f"Warning: Invalid JSON for symbol {symbol}: {alerts_data}")
+                                    existing_alerts = []
+                            else:
+                                # It's already a Python object
+                                existing_alerts = alerts_data
+                                print(f"Existing alerts is already a Python object: {type(existing_alerts)}")
+                        
+                        if not isinstance(existing_alerts, list):
+                            print(f"Warning: existing_alerts is not a list: {type(existing_alerts)}")
+                            existing_alerts = []
+                        
+                        # Add new alerts, avoiding duplicates
+                        existing_alert_types = {a.get('type') for a in existing_alerts if isinstance(a, dict) and 'type' in a}
+                        for alert in all_alerts:
+                            if alert.get('type') not in existing_alert_types:
+                                existing_alerts.append(alert)
+                                existing_alert_types.add(alert.get('type'))
+                        
+                        # Always convert to JSON string for storage
+                        alerts_json = json.dumps(existing_alerts)
+                        print(f"Updating alerts for {symbol} with {len(existing_alerts)} total alerts")
+                        
+                        cur.execute(f"""
+                            UPDATE {alerts_table}
+                            SET alerts = %s
+                            WHERE stock = %s AND DATE(datetime) = DATE(%s)
+                        """, (alerts_json, symbol, end_date))
+                    else:
+                        # Insert new alert
+                        # Always convert to JSON string for storage
+                        alerts_json = json.dumps(all_alerts)
+                        print(f"Inserting new alerts for {symbol} with {len(all_alerts)} alerts")
+                        
+                        cur.execute(f"""
+                            INSERT INTO {alerts_table} (datetime, stock, {name_field}, alerts)
+                            VALUES (%s, %s, %s, %s)
+                        """, (end_date, symbol, entity_name, alerts_json))
+                    
+                    conn.commit()
+                    print(f"Successfully stored alerts for {symbol}")
+        except Exception as e:
+            print(f"Error in store_alerts_in_db for {symbol}: {str(e)}")
+            print("Full traceback:")
+            traceback.print_exc()
+            raise
     
     def process_symbols(self, symbols: List[Dict[str, Any]], market: str, 
                        end_date: Optional[datetime] = None,
@@ -342,7 +370,10 @@ class HeikinAshiAlertDetector:
                 
                 if alert_count > 0:
                     print(f"Found {alert_count} alerts for {symbol}")
-                    self.store_alerts_in_db(symbol, market, alerts, end_date, base)
+                    try:
+                        self.store_alerts_in_db(symbol, market, alerts, end_date, base)
+                    except Exception as e:
+                        print(f"Error storing alerts for {symbol}: {str(e)}")
                 else:
                     print(f"No alerts for {symbol}")
                     

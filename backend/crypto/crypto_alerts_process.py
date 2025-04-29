@@ -95,7 +95,20 @@ def process_alerts(date, base='usd'):
             """, (date,))
             
             for row in cur.fetchall():
-                existing_alerts[row[0]] = json.loads(row[1]) if row[1] else []
+                # Fix: Handle the case when alerts is already a list or still a JSON string
+                alerts_data = row[1]
+                if alerts_data:
+                    if isinstance(alerts_data, str):
+                        try:
+                            existing_alerts[row[0]] = json.loads(alerts_data)
+                        except json.JSONDecodeError:
+                            print(f"Warning: Invalid JSON for crypto {row[0]}: {alerts_data}")
+                            existing_alerts[row[0]] = []
+                    else:
+                        # It's already a list or other Python object
+                        existing_alerts[row[0]] = alerts_data
+                else:
+                    existing_alerts[row[0]] = []
             
             # Prepare final data with merged alerts
             alerts_to_insert = []
