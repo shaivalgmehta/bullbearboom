@@ -132,7 +132,7 @@ function US_StockAlertsApp({ drawerOpen, toggleDrawer }) {
 
         // Apply alert type filters
         const matchesAlertTypes = alertTypeFilters.length === 0 || 
-          alertTypeFilters.some(type => {
+          alertTypeFilters.every(type => {
             return alert.alerts && alert.alerts.some(a => a.type === type);
           });
 
