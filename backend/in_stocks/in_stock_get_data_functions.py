@@ -203,8 +203,7 @@ def store_missing_data(df: pd.DataFrame, symbol: str, stock_name: str, store_sto
             'close': float(row['close']) if pd.notnull(row['close']) else None,
             'volume': float(row['volume']) if pd.notnull(row['volume']) else None,
             'high': float(row['high']) if pd.notnull(row['high']) else None,
-            'low': float(row['low']) if pd.notnull(row['low']) else None,
-            'ema': ema else None
+            'low': float(row['low']) if pd.notnull(row['low']) else None
         }
         data_to_store.append(data_point)
 
